@@ -85,7 +85,10 @@ try {
     $names = @($kernelSpecs.kernelspecs.PSObject.Properties.Name)
     if ($names.Count -ne 1 -or $names[0] -ne 'python3') { throw 'Non-project kernels were exposed' }
     $actualPython = $kernelSpecs.kernelspecs.python3.spec.argv[0]
-    if ($actualPython -ne $venvPython) { throw 'Kernel points outside project environment' }
+    # Windows runners can expose TEMP using an 8.3 name; compare file identity,
+    # not the spelling returned by different Windows/Python APIs.
+    & $venvPython -I -c "import pathlib,sys; assert pathlib.Path(sys.argv[1]).samefile(pathlib.Path(sys.argv[2]))" $actualPython $venvPython
+    if ($LASTEXITCODE -ne 0) { throw 'Kernel points outside project environment' }
     $listeners = @(Get-NetTCPConnection -State Listen -LocalPort $info.port)
     if (@($listeners | Where-Object LocalAddress -ne '127.0.0.1').Count) { throw 'Non-loopback listener found' }
     Invoke-Profile 10
@@ -101,7 +104,7 @@ import uuid
 from datetime import datetime, timezone
 import websocket
 
-root = pathlib.Path(sys.argv[1])
+root = pathlib.Path(sys.argv[1]).resolve()
 runtime = root / ".portable-jupyter" / "jupyter-runtime"
 info = json.loads(next(runtime.glob("jpserver-*.json")).read_text(encoding="utf-8"))
 def api(path, method="GET", body=None):
@@ -123,7 +126,7 @@ for _ in range(60):
 ws_url = info["url"].replace("http://", "ws://") + "api/kernels/" + session["kernel"]["id"] + "/channels?token=" + info["token"]
 channel = websocket.create_connection(ws_url, timeout=45, origin=info["url"].rstrip("/"))
 try:
-    code = "import pathlib,site,sys; assert sys.version_info[:3]==(3,13,16); assert pathlib.Path(sys.prefix)==pathlib.Path(" + repr(str(root / ".venv")) + "); assert not site.ENABLE_USER_SITE; assert pathlib.Path.cwd()==pathlib.Path(" + repr(str(root / "notebooks" / "nested")) + "); print('LOCAL KERNEL EXECUTION SUCCESS')"
+    code = "import pathlib,site,sys; assert sys.version_info[:3]==(3,13,16); assert pathlib.Path(sys.prefix).resolve()==pathlib.Path(" + repr(str(root / ".venv")) + ").resolve(); assert not site.ENABLE_USER_SITE; assert pathlib.Path.cwd().resolve()==pathlib.Path(" + repr(str(root / "notebooks" / "nested")) + ").resolve(); print('LOCAL KERNEL EXECUTION SUCCESS')"
     msg_id = uuid.uuid4().hex
     request = {"header": {"msg_id": msg_id, "username": "test", "session": uuid.uuid4().hex,
         "msg_type": "execute_request", "version": "5.3", "date": datetime.now(timezone.utc).isoformat()},
