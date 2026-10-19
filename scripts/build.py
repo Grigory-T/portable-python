@@ -97,6 +97,7 @@ def build(profile, output):
         for name, path in entries:
             assert not name.startswith("/") and ".." not in Path(name).parts
             info = zipfile.ZipInfo(name, date_time=(2026, 10, 19, 0, 0, 0))
+            info.create_system = 3  # Fixed ZIP host metadata across build platforms.
             info.compress_type = zipfile.ZIP_DEFLATED
             info.external_attr = 0o100644 << 16
             content = path.read_bytes().replace(b"\r\n", b"\n")
