@@ -1,0 +1,23 @@
+name: Build and Windows acceptance
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Build the source-only ZIPs
+        run: python scripts/build.py
+      - name: Application acceptance
+        shell: powershell
+        run: ./tests/application.ps1 -Zip ./dist/portable-python-one-launcher-0.1.0-windows-x86_64.zip
+      - name: JupyterLab acceptance
+        shell: powershell
+        run: ./tests/jupyterlab.ps1 -Zip ./dist/portable-python-jupyterlab-0.1.0-windows-x86_64.zip

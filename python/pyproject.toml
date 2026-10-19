@@ -1,0 +1,23 @@
+[project]
+name = "portable-python-one-launcher"
+version = "0.1.0"
+description = "General Windows target-resolved portable Python application"
+# This minimal profile uses one exact value for both runtime selection and
+# project compatibility. Choose another documented exact version before the
+# first START.bat run if required.
+requires-python = "==3.13.16"
+# Add application libraries before first START. Standard-library imports need no entry.
+dependencies = []
+
+[tool.uv]
+package = false
+required-version = "==0.13.1"
+
+[tool.portable-python]
+uv-archive-sha256 = "3b2661a463a5baea7f5076ea2b25ab71d77f36a6c0d809e5350651792f80a672"
+uv-exe-sha256 = "4075a09490327d2bedfacc807fa48252fb93647c5bd7ef28f00e579160ea3fb5"
+
+[[tool.uv.index]]
+name = "pypi"
+url = "https://pypi.org/simple"
+default = true

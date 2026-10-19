@@ -1,0 +1,29 @@
+[project]
+name = "portable-python-jupyterlab"
+version = "0.1.0"
+description = "General Windows target-resolved portable JupyterLab environment"
+# Select one exact CPython version before the first START.bat run.
+requires-python = "==3.13.16"
+# User notebook libraries belong here. Empty means no additional libraries.
+dependencies = []
+
+# Mandatory notebook infrastructure; not part of the user-library list.
+[dependency-groups]
+jupyter = [
+    "jupyterlab==4.6.4",
+    "ipykernel==7.4.0",
+]
+
+[tool.uv]
+package = false
+default-groups = ["jupyter"]
+required-version = "==0.13.1"
+
+[tool.portable-python]
+uv-archive-sha256 = "3b2661a463a5baea7f5076ea2b25ab71d77f36a6c0d809e5350651792f80a672"
+uv-exe-sha256 = "4075a09490327d2bedfacc807fa48252fb93647c5bd7ef28f00e579160ea3fb5"
+
+[[tool.uv.index]]
+name = "pypi"
+url = "https://pypi.org/simple"
+default = true

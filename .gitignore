@@ -1,0 +1,12 @@
+dist/
+__pycache__/
+*.py[cod]
+.venv/
+.portable-python/
+.portable-jupyter/
+uv.lock
+.ipynb_checkpoints/
+*.log
+.env
+.env.*
+!.env.example
