@@ -25,6 +25,11 @@ Both are usable immediately. The application example uses only the standard
 library. The notebook example checks its actual interpreter and directory.
 The ZIPs contain readable text source, not an opaque installer or executable.
 
+Only these two general tools are maintained. Customize application/notebook
+content and `pyproject.toml`, not a project-specific copy of the bootstrap.
+**START.bat is the sole normal user entry point** for both first preparation
+and subsequent sessions; there is no separate required SETUP step.
+
 ## Python and libraries
 
 Default pins: **CPython 3.13.16**, **uv 0.13.1**; the notebook edition adds
