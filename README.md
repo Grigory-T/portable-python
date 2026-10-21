@@ -30,6 +30,30 @@ content and `pyproject.toml`, not a project-specific copy of the bootstrap.
 **START.bat is the sole normal user entry point** for both first preparation
 and subsequent sessions; there is no separate required SETUP step.
 
+## Supported environment
+
+This is a **Windows-specific bootstrap**, not a universal Python distribution.
+The following applies to both ZIPs; the application/libraries may add requirements.
+
+| Area | Support / assumption |
+|---|---|
+| OS | **Windows 11, 64-bit**. Windows 10/Server are outside the supported target, even if they happen to work. |
+| CPU | **Intel or AMD x86-64** (`x64`, `AMD64`). No 32-bit x86, ARM/ARM64 or RISC-V support, including emulation. |
+| Devices | Compatible Windows laptops/desktops. A VM must provide the same environment; no separate VM guarantee. Android/iOS phones/tablets are unsupported. |
+| Other systems | Linux, WSL, macOS and their containers are unsupported. Upstream uv supporting them does not make these launchers portable to them. |
+| Host tools | 64-bit **Windows PowerShell 5.1**, its .NET Framework, `cmd.exe` and `Expand-Archive`. BITS is needed only for the bootstrap download fallback. PowerShell 7 is not required. |
+| Runtime/build tools | No preinstalled Python, uv, pip, compiler, SDK, Git, Node.js or Docker required. Only compatible wheels are installed; no source compilation. Windows system DLLs remain necessary; extra libraries may need external DLLs/drivers. |
+| Storage | Writable local **fixed-drive** folder, SSD or HDD; SSD is faster. No network/UNC/mapped drives, removable-type drives, junctions or symlinks. Do not move a prepared environment. |
+| RAM/CPU/disk | No measured project-wide minimum. Allow resources for Windows, Python, caches, installed libraries and your data. No GPU/CUDA required by the defaults; selected libraries can change this. |
+| Network | First setup and package changes need DNS and HTTPS access to official sources. Ethernet, Wi-Fi or mobile Internet are equivalent. VPN/proxy use is conditional on working access/authentication. |
+| Permissions | Standard user with permission to write the folder and execute downloaded EXEs/DLLs and PowerShell. No administrator install; organization-enforced controls are not overridden. |
+| JupyterLab | A modern JavaScript-enabled browser and permitted loopback HTTP/WebSocket connections. Server and browser run locally; no public listening port is required. |
+
+Unchanged later starts need no setup download; offline use still depends on
+what the app/notebooks do. Package availability, CPU instructions, native DLLs,
+drivers, resource limits and organization policy are not hidden guarantees.
+See [environment details and limitations](docs/ENVIRONMENT.md).
+
 ## Python and libraries
 
 Default pins: **CPython 3.13.16**, **uv 0.13.1**; the notebook edition adds
