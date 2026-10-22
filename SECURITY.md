@@ -78,9 +78,10 @@ For ordinary bugs, provide a minimal example and redacted diagnostics.
 - Jupyter binds to loopback, keeps token authentication, exposes only the local
   Python kernel, and uses a read-only extension manager. News/update polling is
   disabled; package changes remain in TOML/uv.
-- Each invocation writes a fresh 256-bit random token into the explicit server
-  JSON using Jupyter's secure-write helper, not command-line arguments or the
-  journal. Auto-loaded base `jupyter*_config.py/json` in the generated config
+- Jupyter generates a fresh random authentication token at server startup and
+  prints a usable full localhost URL to its console. No token is explicitly
+  set in launcher config, command arguments or the journal. Auto-loaded base
+  `jupyter*_config.py/json` in the generated config
   directory is refused. Generated config is not a customization interface.
 
 START invokes the local reviewed PowerShell file with a process-scoped
@@ -122,7 +123,7 @@ CI additionally checks its installed package versions against OSV; failure or
 service unavailability is not called clean. This check is not run by START and
 does not certify any later/user-modified graph.
 
-The initial public release used uv **0.13.1**. Current v0.1.1 pins **0.13.4**
+The initial public release used uv **0.13.1**. Current v0.1.2 pins **0.13.4**
 and refuses older versions. Versions 0.12.7 through 0.12.17 had a Windows
 wheel-extraction vulnerability. See
 [GHSA-2cv4-cqwr-gwf7](https://github.com/astral-sh/uv/security/advisories/GHSA-2cv4-cqwr-gwf7).

@@ -27,6 +27,13 @@ function Write-ServerDiagnostics {
     }
 }
 
+function Read-LiveServerOutput([string]$Name) {
+    # Redirected output is still open for writing while the server is running.
+    $stream = [IO.File]::Open((Join-Path $testRoot $Name), 'Open', 'Read', 'ReadWrite')
+    $reader = New-Object IO.StreamReader($stream)
+    try { return $reader.ReadToEnd() } finally { $reader.Dispose() }
+}
+
 function Invoke-Profile([int]$Expected = 0) {
     $script:lastOutput = ''
     $previous = $ErrorActionPreference
@@ -50,12 +57,9 @@ try {
     Invoke-Profile
     if ($lastOutput -notmatch 'Setup:\s+PERFORMED') { throw 'Fresh setup not performed' }
     $configPath = Join-Path $root '.portable-jupyter\jupyter-config\portable-server.json'
-    $firstToken = ([IO.File]::ReadAllText($configPath) | ConvertFrom-Json).IdentityProvider.token
-    if ($firstToken.Length -ne 64) { throw 'Missing strong session token' }
+    if ([IO.File]::ReadAllText($configPath) -match '"token"\s*:') { throw 'Configured token would hide the browser fallback URL' }
     Invoke-Profile
     if ($lastOutput -notmatch 'Setup:\s+SKIPPED') { throw 'Unchanged setup not skipped' }
-    $nextToken = ([IO.File]::ReadAllText($configPath) | ConvertFrom-Json).IdentityProvider.token
-    if ($nextToken -eq $firstToken) { throw 'Session token did not rotate' }
 
     # Stale auto-loaded config must not disable authentication or execute code.
     $staleConfig = Join-Path $root '.portable-jupyter\jupyter-config\jupyter_config.json'
@@ -85,6 +89,23 @@ try {
     [IO.File]::WriteAllText($projectPath, $project, $utf8)
     Invoke-Profile
 
+    # Exact reported sequence: start with openpyxl, then add polars and restart.
+    [IO.File]::WriteAllText($projectPath, $project.Replace('dependencies = []', 'dependencies = ["openpyxl"]'), $utf8)
+    Invoke-Profile
+    [IO.File]::WriteAllText($projectPath, $project.Replace('dependencies = []', 'dependencies = ["openpyxl", "polars"]'), $utf8)
+    Invoke-Profile
+    if ($lastOutput -notmatch 'Setup:\s+UPDATED') { throw 'Polars addition did not update' }
+    & $venvPython -I -c "import openpyxl,polars as pl; assert pl.DataFrame(dict(x=[1,2])).select(pl.col('x').sum()).item()==3; print('POLARS IMPORT AND COMPUTE SUCCESS',pl.__version__)"
+    if ($LASTEXITCODE -ne 0) { throw 'Polars failed after declared addition' }
+
+    # A marker alone must not permit SKIPPED when an installed package vanished.
+    & $venvPython -I -c "import importlib.metadata as m,pathlib,shutil; d=m.distribution('polars'); metadata=next(f.locate().parent for f in d.files if f.name=='METADATA'); shutil.rmtree(d.locate_file('polars')); shutil.rmtree(metadata)"
+    if ($LASTEXITCODE -ne 0) { throw 'Could not prepare missing-package fixture' }
+    Invoke-Profile
+    if ($lastOutput -notmatch 'Setup:\s+UPDATED') { throw 'Missing installed package was incorrectly skipped' }
+    & $venvPython -I -c "import polars; print('POLARS REPAIR SUCCESS',polars.__version__)"
+    if ($LASTEXITCODE -ne 0) { throw 'Missing Polars package was not repaired' }
+
     # Preserve a copied notebook in a nested directory across synchronization.
     New-Item -ItemType Directory -Path (Join-Path $root 'notebooks\nested') | Out-Null
     Copy-Item -LiteralPath (Join-Path $root 'notebooks\WELCOME.ipynb') -Destination (Join-Path $root 'notebooks\nested\copy.ipynb')
@@ -112,6 +133,10 @@ try {
     if ($null -eq $info) { throw 'Jupyter server did not become ready' }
     $script:serverInfo = $info
     if (-not $info.token) { throw 'Authentication token was disabled' }
+    $console = (Read-LiveServerOutput 'server.stdout') + (Read-LiveServerOutput 'server.stderr')
+    if ($console -notmatch ('http://127\.0\.0\.1:' + $info.port + '/lab\?token=' + [regex]::Escape($info.token))) {
+        throw 'No usable full tokenized JupyterLab URL in the console'
+    }
     $kernelSpecs = Invoke-RestMethod -Uri ($info.url + 'api/kernelspecs') -Headers $headers
     $names = @($kernelSpecs.kernelspecs.PSObject.Properties.Name)
     if ($names.Count -ne 1 -or $names[0] -ne 'python3') { throw 'Non-project kernels were exposed' }
@@ -165,7 +190,7 @@ for _ in range(60):
 ws_url = info["url"].replace("http://", "ws://") + "api/kernels/" + session["kernel"]["id"] + "/channels?token=" + info["token"]
 channel = websocket.create_connection(ws_url, timeout=45, origin=info["url"].rstrip("/"), http_no_proxy=["127.0.0.1", "localhost"])
 try:
-    code = "import os,pathlib,site,sys; assert not any(k in os.environ for k in ('SSL_CERT_FILE','SSL_CERT_DIR','BROWSER')); assert sys.version_info[:3]==(3,13,16); assert pathlib.Path(sys.prefix).resolve()==pathlib.Path(" + repr(str(root / ".venv")) + ").resolve(); assert not site.ENABLE_USER_SITE; assert pathlib.Path.cwd().resolve()==pathlib.Path(" + repr(str(root / "notebooks" / "nested")) + ").resolve(); print('LOCAL KERNEL EXECUTION SUCCESS')"
+    code = "import os,pathlib,site,sys,openpyxl,polars as pl; assert pl.DataFrame(dict(x=[1,2])).select(pl.col('x').sum()).item()==3; assert not any(k in os.environ for k in ('SSL_CERT_FILE','SSL_CERT_DIR','BROWSER')); assert sys.version_info[:3]==(3,13,16); assert pathlib.Path(sys.prefix).resolve()==pathlib.Path(" + repr(str(root / ".venv")) + ").resolve(); assert not site.ENABLE_USER_SITE; assert pathlib.Path.cwd().resolve()==pathlib.Path(" + repr(str(root / "notebooks" / "nested")) + ").resolve(); print('LOCAL KERNEL EXECUTION AND POLARS COMPUTE SUCCESS')"
     msg_id = uuid.uuid4().hex
     request = {"header": {"msg_id": msg_id, "username": "test", "session": uuid.uuid4().hex,
         "msg_type": "execute_request", "version": "5.3", "date": datetime.now(timezone.utc).isoformat()},
@@ -184,7 +209,7 @@ try:
             output += message["content"]["text"]
         if msg_type == "status" and message["content"]["execution_state"] == "idle":
             break
-    assert "LOCAL KERNEL EXECUTION SUCCESS" in output
+    assert "LOCAL KERNEL EXECUTION AND POLARS COMPUTE SUCCESS" in output
     print(output.strip())
 finally:
     channel.close()

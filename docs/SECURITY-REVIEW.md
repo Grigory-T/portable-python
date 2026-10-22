@@ -4,7 +4,24 @@ Review date: 2026-10-22. Scope: both launchers, normal `.py` execution, generate
 config, download trust, tests and release delivery. This is a limited engineering
 review, not a certification, penetration test or guarantee of harmless dependencies.
 
-## Narrow changes in v0.1.1
+## Reliability correction in v0.1.2
+
+- v0.1.1's explicitly configured token made Jupyter intentionally print
+  `token=...`, breaking the manual browser fallback. Restore Jupyter's built-in
+  random token generation, while retaining stale-base-config refusal and
+  cleared environment overrides. Test the full actual tokenized URL in console
+  output, non-empty runtime token and unauthenticated API rejection.
+- Before skipping Jupyter setup, run an offline locked uv environment check.
+  Repair missing distributions through normal exact sync. Show installed
+  versions of declared user libraries on each start. No import of user libraries
+  is required by the launcher; package code remains trusted, not sandboxed.
+- Test adding openpyxl then Polars, repairing a removed Polars installation,
+  and real Polars computation inside the project notebook kernel. The reported
+  v0.1.1 saved-edit/SKIPPED mismatch was not reproduced on the test machine;
+  do not claim that its exact cause is established.
+- The application launcher behavior and runtime pins are unchanged.
+
+## Narrow changes introduced in v0.1.1
 
 - Pin uv **0.13.4**, verifying the official asset digest, upstream checksum and
   extracted executable hash. The later-published
@@ -18,10 +35,9 @@ review, not a certification, penetration test or guarantee of harmless dependenc
 - Clear inherited SSL_CERT_FILE/SSL_CERT_DIR, matching the documented Windows
   certificate-store policy. Clear Jupyter's BROWSER command override. Do not
   weaken TLS, remove corporate trust roots or change global settings.
-- Generate a fresh random token in secure-written explicit Jupyter config;
-  never put it in command arguments/journals. Refuse stale base Python/JSON
-  configuration in the launcher-owned config directory. Test unauthenticated
-  access rejection as well as a non-empty token.
+- Refuse stale base Python/JSON configuration in the launcher-owned config
+  directory. Test unauthenticated access rejection and a non-empty token.
+  The explicit-token implementation was superseded in v0.1.2 as described above.
 - Use literal .NET directory/ZIP/download APIs (avoiding PS 5.1 wildcard-path
   handling), strip diagnostic terminal controls and
   redact HTTP URL credentials. These remain limited privacy measures.

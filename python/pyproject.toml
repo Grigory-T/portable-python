@@ -1,6 +1,6 @@
 [project]
 name = "portable-python-one-launcher"
-version = "0.1.1"
+version = "0.1.2"
 description = "General Windows target-resolved portable Python application"
 # This minimal profile uses one exact value for both runtime selection and
 # project compatibility. Choose another documented exact version before the

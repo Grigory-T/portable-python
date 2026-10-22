@@ -22,8 +22,8 @@ retain their generated test folders for inspection. No production data is used.
 After building, from the repository root in PowerShell:
 
 ```powershell
-.\tests\application.ps1 -Zip .\dist\portable-python-one-launcher-0.1.1-windows-x86_64.zip -Audit
-.\tests\jupyterlab.ps1 -Zip .\dist\portable-python-jupyterlab-0.1.1-windows-x86_64.zip -Audit
+.\tests\application.ps1 -Zip .\dist\portable-python-one-launcher-0.1.2-windows-x86_64.zip -Audit
+.\tests\jupyterlab.ps1 -Zip .\dist\portable-python-jupyterlab-0.1.2-windows-x86_64.zip -Audit
 ```
 
 Application checks: fresh setup/run, empty-library default, Unicode path,
@@ -48,6 +48,12 @@ Additional regressions cover literal square brackets in paths, inherited
 SSL_CERT_FILE/SSL_CERT_DIR/BROWSER overrides, project-root startup-hook isolation
 during application infrastructure checks, stale Jupyter config refusal, fresh
 session tokens, and rejection of unauthenticated kernel access.
+
+Jupyter regression tests add openpyxl then Polars in the saved TOML, remove a
+Polars distribution to verify repair despite an unchanged ready marker, and
+run real Polars computation through a notebook kernel. They assert the full
+usable URL (including the actual runtime token) appears in console output,
+without copying the token to CI messages or the launcher journal.
 
 Shutdown waits up to 90 seconds for the owned launcher and checks that its
 listening port closed. Failures print redacted server-output tails and clean

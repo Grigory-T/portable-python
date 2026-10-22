@@ -11,7 +11,7 @@ $ErrorActionPreference = "Stop"
 $ProgressPreference = "SilentlyContinue"
 Set-StrictMode -Version 2.0
 
-$ProfileSchema = "jupyterlab-public-2"
+$ProfileSchema = "jupyterlab-public-3"
 $UvVersion = "unknown"
 $UvArchiveUrl = ""
 $UvArchiveSha256 = ""
@@ -330,7 +330,26 @@ function Test-PreparedState(
         Confirm-ApprovedLockOrigins $LockPath
         $expectedBase = Join-Path $RuntimeRoot "$PythonRequest\python.exe"
         & $VenvPython -I -B -X utf8 -c "import importlib.metadata as m,pathlib,site,sys; actual='.'.join(map(str,sys.version_info[:3])); valid=actual==sys.argv[1] and not site.ENABLE_USER_SITE and pathlib.Path(sys._base_executable).resolve()==pathlib.Path(sys.argv[2]).resolve() and m.version('jupyterlab')==sys.argv[3] and m.version('ipykernel')==sys.argv[4]; raise SystemExit(0 if valid else 3)" $PythonVersion $expectedBase $JupyterLabVersion $IpKernelVersion
-        return ($LASTEXITCODE -eq 0)
+        if ($LASTEXITCODE -ne 0) { return $false }
+
+        # A readiness fingerprint is not proof that the installed environment
+        # still matches the lock. Check locally, without installing or networking.
+        Write-Host "[dependency_state_check]"
+        $previousPreference = $ErrorActionPreference
+        try {
+            $ErrorActionPreference = "Continue"
+            $checkOutput = & $UvExe --no-config --offline --managed-python --no-python-downloads sync --project $Root --locked --group jupyter --no-install-project --no-build --no-sources --python $PythonRequest --check --default-index $PyPiIndex 2>&1
+            $checkCode = $LASTEXITCODE
+        } finally {
+            $ErrorActionPreference = $previousPreference
+        }
+        if ($checkCode -ne 0) {
+            Write-Host "Local packages need synchronization; setup will run." -ForegroundColor Yellow
+            Write-PortableLog "portable-python" "dependency_state_check" "update_required" (($checkOutput | Out-String).Trim())
+            return $false
+        }
+        Write-PortableLog "portable-python" "dependency_state_check" "success" "installed packages match uv.lock; offline check"
+        return $true
     } catch {
         return $false
     }
@@ -370,9 +389,19 @@ function Set-ProjectKernel {
     $kernelCode = @'
 import json
 import pathlib
-import secrets
 import sys
+import tomllib
+from importlib.metadata import version
 from jupyter_core.paths import secure_write
+from packaging.requirements import Requirement
+
+project = tomllib.loads(pathlib.Path(sys.argv[3]).read_text(encoding="utf-8"))
+requirements = [Requirement(item) for item in project["project"]["dependencies"]]
+for requirement in requirements:
+    if requirement.marker is None or requirement.marker.evaluate():
+        print(f"User library: {requirement.name}=={version(requirement.name)}")
+if not requirements:
+    print("User libraries: none")
 
 # This directory is launcher-owned, not a user configuration interface.
 # Refuse stale auto-loaded base config, including executable Python config.
@@ -391,7 +420,10 @@ spec = {
     "metadata": {"debugger": True},
 }
 (spec_dir / "kernel.json").write_text(json.dumps(spec, indent=2), encoding="utf-8")
-config = {"IdentityProvider": {"token": secrets.token_hex(32)}, "LabApp": {
+# Let Jupyter generate the session token. Supplying a token in config makes
+# Jupyter intentionally hide it as token=... in the console connection URL.
+# Environment token overrides are cleared and stale base config is refused.
+config = {"LabApp": {
     "extension_manager": "readonly",
     "news_url": None,
     "check_for_updates_class": "jupyterlab.NeverCheckForUpdate",
@@ -406,7 +438,7 @@ print("Kernel: project-local .venv only")
     $kernelPath = Join-Path $StateRoot "project-kernel.py"
     [System.IO.File]::WriteAllText($kernelPath, $kernelCode, (New-Object System.Text.UTF8Encoding($false)))
     Invoke-Checked "kernel_config" $VenvPython @(
-        "-I", "-B", "-X", "utf8", $kernelPath, $KernelRoot, $ServerConfig
+        "-I", "-B", "-X", "utf8", $kernelPath, $KernelRoot, $ServerConfig, $PyprojectPath
     )
 }
 
@@ -673,6 +705,8 @@ if ($PortableReady) {
             Write-Host "Notebook folder: notebooks (under the local project root)"
             Write-Host "Network bind:    127.0.0.1 only"
             Write-Host "Browser:         $(if ($NoBrowser) { 'disabled by technical option' } else { 'opening requested; Windows default browser' })"
+            Write-Host "Browser fallback: copy Jupyter's full localhost URL, including its token, printed below."
+            Write-Host "Keep the token private; it grants access to this local server."
             Write-Host "Stop server:     JupyterLab File > Shut Down, or Ctrl+C in this window"
             Write-Host "Please wait: starting JupyterLab..." -ForegroundColor Yellow
             Write-PortableLog "jupyterlab" "server_start" "running" "root=notebooks; browser=$openBrowser"

@@ -77,9 +77,11 @@ workspace.lock, and portable-jupyter.log. Optional Matplotlib state is directed
 to matplotlib/ only if a notebook actually uses that library; it is not
 installed by default. python-bin/ is reserved and normally absent (--no-bin).
 Do not share runtime connection files: they contain authentication material.
-portable-server.json also contains a fresh random session token. It is written
-with Jupyter's secure-write helper, never passed in command-line arguments or
-copied to the diagnostic journal. Tokens rotate at every launcher invocation.
+Jupyter generates a fresh random token each time its server starts. The full
+localhost URL with that token is printed in the console for browser fallback,
+never copied to the launcher journal or passed in command-line arguments.
+portable-server.json is generated with Jupyter's secure-write helper; it does
+not set a token, because Jupyter hides explicitly configured tokens in its URL.
 Unexpected auto-loaded jupyter*_config.py/json files in the generated config
 directory cause a safe failure. Use fresh extraction, not custom base config.
 
@@ -87,7 +89,9 @@ uv.lock records exact resolved packages, artifact URLs and hashes. ready.state
 records the selected Python/uv/Jupyter versions and hashes of pyproject.toml,
 uv.lock, and the launcher; it allows unchanged starts to skip setup. Runtime
 validation also checks that the .venv base interpreter belongs to this project.
-This is a consistency check, not a hash audit of every installed package file.
+Before skipping setup, an offline uv sync --locked --check also verifies the
+installed distribution state. Missing/mismatched distributions trigger setup
+and exact synchronization. This is not a hash audit of every installed file.
 Do not move a prepared workspace: recreate it at the new location and copy
 only notebooks/user data. Keep both the base python/ runtime and .venv/.
 
@@ -186,6 +190,14 @@ machine or requirements.lock is needed. Removing an entry and restarting
 removes it during exact synchronization unless another package still needs it.
 The notebooks/ tree is preserved, including nested copied notebooks.
 
+Concrete example: change dependencies = ["openpyxl"] to
+dependencies = ["openpyxl", "polars"], SAVE this project's pyproject.toml,
+stop its server, then START.bat. Expect Setup: UPDATED and
+User library: polars==<installed version>. Then import polars in a new kernel.
+If you see SKIPPED despite an intended edit, confirm the saved file is beside
+the START.bat you ran, not another extraction or an unsaved editor buffer.
+In a notebook, print(sys.executable) identifies its actual environment.
+
 Do not put pip/subprocess installation calls in notebook startup code. uv is
 the package manager for this profile. Ad-hoc uv-pip installs are unrecorded and
 may disappear on the next exact sync; use pyproject.toml for persistent changes.
@@ -204,7 +216,7 @@ First START.bat:
 
 Later unchanged START.bat:
 
-  validate prepared state
+  validate prepared state and check installed packages locally/offline
     -> Setup: SKIPPED
     -> start JupyterLab without setup/download activity
 
@@ -225,6 +237,9 @@ with an explicit already-in-use message instead of updating a live environment.
 First setup needs Internet and can take several minutes (especially uv lock);
 later unchanged starts do not resolve/install packages. If the browser does
 not open, use the tokenized localhost URL shown by Jupyter in the console.
+Copy the FULL URL including token; token=... with literal dots is not usable.
+Never disable authentication as a browser workaround. Restarting the server
+generates a new token; a previously copied URL may no longer authenticate.
 
 This is deliberately different from a fixed application's separate SETUP/START
 profile: notebook library edits are supported in place. -SetupOnly is the

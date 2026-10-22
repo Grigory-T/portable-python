@@ -1,6 +1,6 @@
 [project]
 name = "portable-python-jupyterlab"
-version = "0.1.1"
+version = "0.1.2"
 description = "General Windows target-resolved portable JupyterLab environment"
 # Select one exact CPython version before the first START.bat run.
 requires-python = "==3.13.16"

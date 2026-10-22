@@ -18,8 +18,8 @@ can take several minutes; unchanged later starts skip package setup.
 
 | ZIP | Purpose | Put your code here |
 |---|---|---|
-| `portable-python-one-launcher-0.1.1-windows-x86_64.zip` | Ordinary Python application | `application/`; entry point `__main__.py` |
-| `portable-python-jupyterlab-0.1.1-windows-x86_64.zip` | Interactive notebooks | `notebooks/`; create or copy `.ipynb` files |
+| `portable-python-one-launcher-0.1.2-windows-x86_64.zip` | Ordinary Python application | `application/`; entry point `__main__.py` |
+| `portable-python-jupyterlab-0.1.2-windows-x86_64.zip` | Interactive notebooks | `notebooks/`; create or copy `.ipynb` files |
 
 Both are usable immediately. The application example uses only the standard
 library. The notebook example checks its actual interpreter and directory.
@@ -65,7 +65,7 @@ Before first start, edit the supplied `pyproject.toml`, retaining its metadata:
 ```toml
 [project]
 name = "portable-python-one-launcher"
-version = "0.1.1"
+version = "0.1.2"
 description = "General Windows portable Python application"
 requires-python = "==3.13.16"
 dependencies = ["openpyxl", "xlrd", "polars"]
@@ -96,6 +96,11 @@ technical commands. Unavailable Python builds or wheels fail explicitly.
   token authentication. To change libraries, stop server/kernels, edit TOML,
   then START again. Notebooks are retained. Closing the browser does not stop
   the server; use **File > Shut Down** or Ctrl+C in the console.
+
+Jupyter checks installed packages locally before skipping setup and prints
+installed versions of declared user libraries. Save changes in this extraction's
+TOML, stop its server, then START again. If the browser does not open, copy the
+**full localhost URL including its token** from the console; keep it private.
 
 Both distinguish setup failure (overall code `10`) from app/server failure
 (`20`), with `0` success and `30` launcher failure. Local JSONL journals record
@@ -135,7 +140,7 @@ not deliberately copied into those journals.
   security/proxy policy is made. See [security policy](SECURITY.md).
 
 See the [review decisions](docs/SECURITY-REVIEW.md) for fixes, accepted tradeoffs
-and the limits of the security claims. Use a fresh extraction for v0.1.1;
+and the limits of the security claims. Use a fresh extraction for v0.1.2;
 do not overwrite an older prepared environment.
 
 ## Source layout and development
