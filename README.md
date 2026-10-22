@@ -18,8 +18,8 @@ can take several minutes; unchanged later starts skip package setup.
 
 | ZIP | Purpose | Put your code here |
 |---|---|---|
-| `portable-python-one-launcher-0.1.0-windows-x86_64.zip` | Ordinary Python application | `application/`; entry point `__main__.py` |
-| `portable-python-jupyterlab-0.1.0-windows-x86_64.zip` | Interactive notebooks | `notebooks/`; create or copy `.ipynb` files |
+| `portable-python-one-launcher-0.1.1-windows-x86_64.zip` | Ordinary Python application | `application/`; entry point `__main__.py` |
+| `portable-python-jupyterlab-0.1.1-windows-x86_64.zip` | Interactive notebooks | `notebooks/`; create or copy `.ipynb` files |
 
 Both are usable immediately. The application example uses only the standard
 library. The notebook example checks its actual interpreter and directory.
@@ -41,7 +41,7 @@ The following applies to both ZIPs; the application/libraries may add requiremen
 | CPU | **Intel or AMD x86-64** (`x64`, `AMD64`). No 32-bit x86, ARM/ARM64 or RISC-V support, including emulation. |
 | Devices | Compatible Windows laptops/desktops. A VM must provide the same environment; no separate VM guarantee. Android/iOS phones/tablets are unsupported. |
 | Other systems | Linux, WSL, macOS and their containers are unsupported. Upstream uv supporting them does not make these launchers portable to them. |
-| Host tools | 64-bit **Windows PowerShell 5.1**, its .NET Framework, `cmd.exe` and `Expand-Archive`. BITS is needed only for the bootstrap download fallback. PowerShell 7 is not required. |
+| Host tools | 64-bit **Windows PowerShell 5.1**, its .NET Framework/ZIP support and `cmd.exe`. BITS is needed only for the bootstrap download fallback. PowerShell 7 is not required. |
 | Runtime/build tools | No preinstalled Python, uv, pip, compiler, SDK, Git, Node.js or Docker required. Only compatible wheels are installed; no source compilation. Windows system DLLs remain necessary; extra libraries may need external DLLs/drivers. |
 | Storage | Writable local **fixed-drive** folder, SSD or HDD; SSD is faster. No network/UNC/mapped drives, removable-type drives, junctions or symlinks. Do not move a prepared environment. |
 | RAM/CPU/disk | No measured project-wide minimum. Allow resources for Windows, Python, caches, installed libraries and your data. No GPU/CUDA required by the defaults; selected libraries can change this. |
@@ -56,7 +56,7 @@ See [environment details and limitations](docs/ENVIRONMENT.md).
 
 ## Python and libraries
 
-Default pins: **CPython 3.13.16**, **uv 0.13.1**; the notebook edition adds
+Default pins: **CPython 3.13.16**, **uv 0.13.4**; the notebook edition adds
 **JupyterLab 4.6.4** and **ipykernel 7.4.0**. The user-library list is empty.
 These are deliberately selected/tested pins, not an auto-update mechanism.
 
@@ -65,7 +65,7 @@ Before first start, edit the supplied `pyproject.toml`, retaining its metadata:
 ```toml
 [project]
 name = "portable-python-one-launcher"
-version = "0.1.0"
+version = "0.1.1"
 description = "General Windows portable Python application"
 requires-python = "==3.13.16"
 dependencies = ["openpyxl", "xlrd", "polars"]
@@ -104,6 +104,12 @@ not deliberately copied into those journals.
 
 ## Scope and safety
 
+- Run only trusted application/notebook code and reviewed packages, as a normal
+  Windows user, in a private local project folder. Code runs with that user's
+  filesystem/network permissions; this is not a sandbox or malware scanner.
+- First setup deliberately resolves packages live on the target. `uv.lock`
+  records that result; it is not a pre-audited dependency graph shipped in the
+  ZIP. CI checks its test installations against OSV, not arbitrary future graphs.
 - Windows 11 AMD64 with 64-bit Windows PowerShell 5.1 is the tested target.
   Linux, macOS, ARM64, 32-bit Windows and offline first setup are not supported.
 - Run from a local folder, never directly from a network share or ZIP preview.
@@ -127,6 +133,10 @@ not deliberately copied into those journals.
   disable TLS, or override organization-controlled execution restrictions.
 - No guarantee of zero vulnerabilities or compatibility with every endpoint
   security/proxy policy is made. See [security policy](SECURITY.md).
+
+See the [review decisions](docs/SECURITY-REVIEW.md) for fixes, accepted tradeoffs
+and the limits of the security claims. Use a fresh extraction for v0.1.1;
+do not overwrite an older prepared environment.
 
 ## Source layout and development
 

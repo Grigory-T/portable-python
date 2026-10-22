@@ -11,7 +11,7 @@ $ErrorActionPreference = "Stop"
 $ProgressPreference = "SilentlyContinue"
 Set-StrictMode -Version 2.0
 
-$ProfileSchema = "jupyterlab-public-1"
+$ProfileSchema = "jupyterlab-public-2"
 $UvVersion = "unknown"
 $UvArchiveUrl = ""
 $UvArchiveSha256 = ""
@@ -45,6 +45,8 @@ $LocalRootApproved = $false
 $WorkspaceLock = $null
 
 function ConvertTo-NeutralText([string]$Text) {
+    $Text = [regex]::Replace($Text, '[\x00-\x08\x0B-\x1F\x7F-\x9F]', '')
+    $Text = [regex]::Replace($Text, '(?i)(https?://)[^\s/@]+@', '$1<redacted>@')
     foreach ($privatePath in @($Root, $env:USERPROFILE, $env:TEMP, $env:TMP)) {
         if ($privatePath) {
             $Text = [regex]::Replace($Text, [regex]::Escape($privatePath), "<local>", "IgnoreCase")
@@ -73,8 +75,8 @@ function Read-BootstrapSettings {
         throw 'tool.uv.required-version must be exactly "==x.y.z".'
     }
     $script:UvVersion = $Matches['version']
-    if ([version]$UvVersion -lt [version]'0.12.18') {
-        throw 'uv must be at least 0.12.18 (Windows wheel-extraction security fix).'
+    if ([version]$UvVersion -lt [version]'0.13.4') {
+        throw 'uv must be at least 0.13.4 (upstream security fixes).'
     }
     $script:UvArchiveSha256 = (Get-QuotedSetting "tool.portable-python" "uv-archive-sha256").ToLowerInvariant()
     $script:UvExeSha256 = (Get-QuotedSetting "tool.portable-python" "uv-exe-sha256").ToLowerInvariant()
@@ -104,7 +106,7 @@ function Write-PortableLog(
     if (-not $LocalRootApproved) { return }
     try {
         if (-not (Test-Path -LiteralPath $StateRoot -PathType Container)) {
-            New-Item -ItemType Directory -Force -Path $StateRoot | Out-Null
+            [System.IO.Directory]::CreateDirectory($StateRoot) | Out-Null
         }
         $record = [ordered]@{
             timestamp = [DateTime]::UtcNow.ToString("o")
@@ -192,7 +194,13 @@ function Download-VerifiedFile(
         if ($null -ne $defaultProxy) {
             $defaultProxy.Credentials = [System.Net.CredentialCache]::DefaultNetworkCredentials
         }
-        Invoke-WebRequest -UseBasicParsing -Uri $Url -OutFile $partial
+        $client = New-Object System.Net.WebClient
+        try {
+            $client.Proxy = $defaultProxy
+            $client.DownloadFile($Url, $partial)
+        } finally {
+            $client.Dispose()
+        }
     } catch {
         if (Test-Path -LiteralPath $partial) {
             [System.IO.File]::Delete($partial)
@@ -243,7 +251,8 @@ function Install-VerifiedUv {
         if (Test-Path -LiteralPath $extractRoot) {
             [System.IO.Directory]::Delete($extractRoot, $true)
         }
-        Expand-Archive -LiteralPath $archive -DestinationPath $extractRoot
+        Add-Type -AssemblyName System.IO.Compression.FileSystem
+        [System.IO.Compression.ZipFile]::ExtractToDirectory($archive, $extractRoot)
         $extractedUv = Join-Path $extractRoot "uv.exe"
         if (-not (Test-Path -LiteralPath $extractedUv -PathType Leaf)) {
             throw "The verified uv archive does not contain uv.exe."
@@ -320,7 +329,7 @@ function Test-PreparedState(
         }
         Confirm-ApprovedLockOrigins $LockPath
         $expectedBase = Join-Path $RuntimeRoot "$PythonRequest\python.exe"
-        & $VenvPython -E -s -B -X utf8 -c "import importlib.metadata as m,pathlib,site,sys; actual='.'.join(map(str,sys.version_info[:3])); valid=actual==sys.argv[1] and not site.ENABLE_USER_SITE and pathlib.Path(sys._base_executable).resolve()==pathlib.Path(sys.argv[2]).resolve() and m.version('jupyterlab')==sys.argv[3] and m.version('ipykernel')==sys.argv[4]; raise SystemExit(0 if valid else 3)" $PythonVersion $expectedBase $JupyterLabVersion $IpKernelVersion
+        & $VenvPython -I -B -X utf8 -c "import importlib.metadata as m,pathlib,site,sys; actual='.'.join(map(str,sys.version_info[:3])); valid=actual==sys.argv[1] and not site.ENABLE_USER_SITE and pathlib.Path(sys._base_executable).resolve()==pathlib.Path(sys.argv[2]).resolve() and m.version('jupyterlab')==sys.argv[3] and m.version('ipykernel')==sys.argv[4]; raise SystemExit(0 if valid else 3)" $PythonVersion $expectedBase $JupyterLabVersion $IpKernelVersion
         return ($LASTEXITCODE -eq 0)
     } catch {
         return $false
@@ -336,6 +345,9 @@ function Set-PortableEnvironment {
     $env:UV_PROJECT_ENVIRONMENT = $VenvRoot
     $env:UV_PYTHON_INSTALL_DIR = $RuntimeRoot
     $env:UV_PYTHON_BIN_DIR = $RuntimeBin
+    $env:SSL_CERT_FILE = $null
+    $env:SSL_CERT_DIR = $null
+    $env:BROWSER = $null
     $env:PYTHONPATH = $null
     $env:PYTHONHOME = $null
     $env:PYTHONNOUSERSITE = "1"
@@ -358,7 +370,16 @@ function Set-ProjectKernel {
     $kernelCode = @'
 import json
 import pathlib
+import secrets
 import sys
+from jupyter_core.paths import secure_write
+
+# This directory is launcher-owned, not a user configuration interface.
+# Refuse stale auto-loaded base config, including executable Python config.
+config_path = pathlib.Path(sys.argv[2])
+for pattern in ("jupyter*_config.py", "jupyter*_config.json"):
+    if any(config_path.parent.glob(pattern)):
+        raise SystemExit("Unexpected Jupyter base configuration in generated state. Use a fresh extraction; do not copy generated config.")
 
 kernel_root = pathlib.Path(sys.argv[1])
 spec_dir = kernel_root / "python3"
@@ -370,7 +391,7 @@ spec = {
     "metadata": {"debugger": True},
 }
 (spec_dir / "kernel.json").write_text(json.dumps(spec, indent=2), encoding="utf-8")
-config = {"LabApp": {
+config = {"IdentityProvider": {"token": secrets.token_hex(32)}, "LabApp": {
     "extension_manager": "readonly",
     "news_url": None,
     "check_for_updates_class": "jupyterlab.NeverCheckForUpdate",
@@ -378,7 +399,8 @@ config = {"LabApp": {
     "allowed_kernelspecs": ["python3"],
     "ensure_native_kernel": False,
 }}
-pathlib.Path(sys.argv[2]).write_text(json.dumps(config, indent=2), encoding="utf-8")
+with secure_write(str(config_path)) as handle:
+    json.dump(config, handle, indent=2)
 print("Kernel: project-local .venv only")
 '@
     $kernelPath = Join-Path $StateRoot "project-kernel.py"
@@ -516,12 +538,12 @@ print(f"Jupyter infrastructure: jupyterlab {jupyterlab_version}, ipykernel {ipyk
     )
 
     Invoke-Checked "runtime_check" $VenvPython @(
-        "-E", "-s", "-B", "-X", "utf8", "-c",
+        "-I", "-B", "-X", "utf8", "-c",
         "import pathlib,site,sys; actual='.'.join(map(str,sys.version_info[:3])); valid=actual==sys.argv[1] and not site.ENABLE_USER_SITE and pathlib.Path(sys._base_executable).resolve()==pathlib.Path(sys.argv[2]).resolve(); print('Python '+actual); print('Interpreter: project-local .venv'); raise SystemExit(0 if valid else 3)",
         $PythonVersion, $runtimePython
     )
     Invoke-Checked "jupyter_check" $VenvPython @(
-        "-E", "-s", "-B", "-X", "utf8", "-c",
+        "-I", "-B", "-X", "utf8", "-c",
         "import importlib.metadata as m; print('JupyterLab '+m.version('jupyterlab')); print('ipykernel '+m.version('ipykernel'))"
     )
 
@@ -557,10 +579,12 @@ try {
     if (-not (Test-Path -LiteralPath $NotebooksRoot -PathType Container)) {
         throw "Required notebook folder is missing: $NotebooksRoot"
     }
-    New-Item -ItemType Directory -Force -Path @(
+    foreach ($directory in @(
         $StateRoot, $NotebooksRoot, $JupyterConfig, $JupyterData,
         $JupyterRuntime, $IPythonRoot, $LocalTemp
-    ) | Out-Null
+    )) {
+        [System.IO.Directory]::CreateDirectory($directory) | Out-Null
+    }
 
     try {
         $WorkspaceLock = [System.IO.File]::Open((Join-Path $StateRoot "workspace.lock"), 'OpenOrCreate', 'ReadWrite', 'None')
@@ -648,7 +672,7 @@ if ($PortableReady) {
             Write-Host "Status:          STARTING"
             Write-Host "Notebook folder: notebooks (under the local project root)"
             Write-Host "Network bind:    127.0.0.1 only"
-            Write-Host "Browser:         $(if ($NoBrowser) { 'disabled by technical option' } else { 'opens automatically' })"
+            Write-Host "Browser:         $(if ($NoBrowser) { 'disabled by technical option' } else { 'opening requested; Windows default browser' })"
             Write-Host "Stop server:     JupyterLab File > Shut Down, or Ctrl+C in this window"
             Write-Host "Please wait: starting JupyterLab..." -ForegroundColor Yellow
             Write-PortableLog "jupyterlab" "server_start" "running" "root=notebooks; browser=$openBrowser"

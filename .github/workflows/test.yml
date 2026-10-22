@@ -17,7 +17,7 @@ jobs:
         run: python scripts/build.py
       - name: Application acceptance
         shell: powershell
-        run: ./tests/application.ps1 -Zip ./dist/portable-python-one-launcher-0.1.0-windows-x86_64.zip
+        run: ./tests/application.ps1 -Zip ./dist/portable-python-one-launcher-0.1.1-windows-x86_64.zip -Audit
       - name: JupyterLab acceptance
         shell: powershell
-        run: ./tests/jupyterlab.ps1 -Zip ./dist/portable-python-jupyterlab-0.1.0-windows-x86_64.zip
+        run: ./tests/jupyterlab.ps1 -Zip ./dist/portable-python-jupyterlab-0.1.1-windows-x86_64.zip -Audit

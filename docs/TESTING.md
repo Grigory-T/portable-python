@@ -22,8 +22,8 @@ retain their generated test folders for inspection. No production data is used.
 After building, from the repository root in PowerShell:
 
 ```powershell
-.\tests\application.ps1 -Zip .\dist\portable-python-one-launcher-0.1.0-windows-x86_64.zip
-.\tests\jupyterlab.ps1 -Zip .\dist\portable-python-jupyterlab-0.1.0-windows-x86_64.zip
+.\tests\application.ps1 -Zip .\dist\portable-python-one-launcher-0.1.1-windows-x86_64.zip -Audit
+.\tests\jupyterlab.ps1 -Zip .\dist\portable-python-jupyterlab-0.1.1-windows-x86_64.zip -Audit
 ```
 
 Application checks: fresh setup/run, empty-library default, Unicode path,
@@ -43,6 +43,25 @@ CI uses read-only repository permissions and a commit-pinned checkout action.
 It runs offline source validation/build and both online Windows acceptance
 tests. No credentials are needed for artifact/package downloads. Tests deliberately
 set an invalid inherited uv index to verify the launcher clears that override.
+
+Additional regressions cover literal square brackets in paths, inherited
+SSL_CERT_FILE/SSL_CERT_DIR/BROWSER overrides, project-root startup-hook isolation
+during application infrastructure checks, stale Jupyter config refusal, fresh
+session tokens, and rejection of unauthenticated kernel access.
+
+Shutdown waits up to 90 seconds for the owned launcher and checks that its
+listening port closed. Failures print redacted server-output tails and clean
+only the test-created process tree. Forced cleanup never converts failure into
+success. The cause of earlier CI-only 30-second failures is not assumed fixed
+merely by increasing the timeout; repeated green Windows CI is required.
+
+`-Audit` additionally runs `scripts/audit.py` using the tested project venv.
+It POSTs installed public PyPI package names/versions to
+`https://api.osv.dev/v1/querybatch` and fails on known advisories or unavailable/
+invalid responses. This developer/CI helper is not included in the user ZIPs,
+adds no user-runtime downloads and does not run on START. Omitting -Audit skips
+only that network check, not acceptance. OSV is point-in-time advisory metadata,
+not a code audit or proof that a later target resolution is safe.
 
 Release verification also includes a manual privacy scan, official artifact
 checksum comparison, upstream advisory review, and limited license review.

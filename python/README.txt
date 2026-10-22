@@ -1,6 +1,6 @@
 PORTABLE PYTHON - APPLICATION PROFILE
 =====================================
-Review revision: 2026-10-19. Main template for ordinary Python applications.
+Review revision: 2026-10-22. Main template for ordinary Python applications.
 Extract freshly; do not overlay an older prepared environment.
 
 QUICK START
@@ -19,6 +19,16 @@ Do not execute it from SMB/UNC/mapped drives. All generated state stays local.
 Folder names may contain spaces/non-ASCII characters; keep paths short enough
 for Windows. The launcher's child process does not change your parent shell.
 
+TRUST MODEL
+-----------
+Use a private local project folder, trusted application code and reviewed
+packages. Run as a normal Windows user, not administrator. Python code and
+dependencies run with that user's filesystem/network permissions and can read
+other inherited environment variables/secrets. This is not a sandbox or scanner.
+The first package graph is resolved live from PyPI, not pre-audited or frozen
+inside the ZIP. Review names/versions; hashes verify bytes, not benign behavior.
+Generated state must not be edited or copied from an untrusted environment.
+
 FILES AND CONTEXT
 -----------------
 START.bat                  user entry point, preserves category code and pauses
@@ -34,7 +44,7 @@ is created by the framework; data paths are an application decision.
 
 PYTHON / PACKAGES
 -----------------
-The defaults are CPython 3.13.16, uv 0.13.1, and NO third-party packages.
+The defaults are CPython 3.13.16, uv 0.13.4, and NO third-party packages.
 
 Edit only the intended values under [project], for example:
   requires-python = "==3.13.16"
@@ -62,7 +72,7 @@ Verified managed-Python choices in this uv catalog:
 Other exact CPython 3.11-3.14 patches work only if present in this pinned catalog
 and compatible with your libraries. Ranges are not valid runtime selections.
 
-[tool.uv].required-version = "==0.13.1" is the exact uv pin. The matching archive
+[tool.uv].required-version = "==0.13.4" is the exact uv pin. The matching archive
 and executable hashes live in [tool.portable-python]. Keep supplied pins unless
 you have independently verified replacement versions/hashes. These are tested
 pins, not a promise that they are the latest releases or vulnerability-free.
@@ -100,6 +110,8 @@ From the project root, the launcher executes:
 -B: do not create .pyc; -X utf8: UTF-8 mode; -m: run package as a module.
 -I/-P are not used here: the adjacent application package must be importable.
 No activation or PATH lookup is required. The working directory is project root.
+Infrastructure runtime checks use -I instead, avoiding project-root startup
+hooks during validation. Installed .pth/site hooks and dependencies remain trusted.
 
 Example application/__main__.py:
   from .entrypoint import main
@@ -156,14 +168,14 @@ Console has separate PORTABLE PYTHON RESULT and APPLICATION RESULT blocks.
 OFFICIAL INTERNET SOURCES / VERIFICATION
 ----------------------------------------
 uv executable archive:
-  https://releases.astral.sh/github/uv/releases/download/0.13.1/uv-x86_64-pc-windows-msvc.zip
+  https://releases.astral.sh/github/uv/releases/download/0.13.4/uv-x86_64-pc-windows-msvc.zip
 Archive SHA-256:
-  3b2661a463a5baea7f5076ea2b25ab71d77f36a6c0d809e5350651792f80a672
+  ccec7508a07d9933d7cb1261880633efcf1f30d6e6eddab21823f1dae6f23225
 Extracted uv.exe SHA-256:
-  4075a09490327d2bedfacc807fa48252fb93647c5bd7ef28f00e579160ea3fb5
+  b9d9656370ee1812e53e985d8bbb81870038106df98ef34cb45bcf4e0fe0df17
 Review references (not automatic extra downloads):
-  https://github.com/astral-sh/uv/releases/tag/0.13.1
-  https://releases.astral.sh/github/uv/releases/download/0.13.1/uv-x86_64-pc-windows-msvc.zip.sha256
+  https://github.com/astral-sh/uv/releases/tag/0.13.4
+  https://releases.astral.sh/github/uv/releases/download/0.13.4/uv-x86_64-pc-windows-msvc.zip.sha256
 
 Default CPython archive from uv's embedded catalog:
   https://releases.astral.sh/github/python-build-standalone/releases/download/20261013/cpython-3.13.16%2B20261013-x86_64-pc-windows-msvc-install_only_stripped.tar.gz
@@ -192,6 +204,9 @@ setup connectivity. HTTP(S)_PROXY is retained; inherited UV_* overrides are
 cleared. --no-config avoids unrelated uv configuration; --system-certs uses
 Windows trust; TLS verification is never disabled. Source builds are disabled
 during lock/sync. Inaccessible approved sources cause an explicit failure.
+SSL_CERT_FILE/SSL_CERT_DIR overrides are cleared in the child process, so they
+cannot silently replace the Windows trust store. Approved roots must be in the
+Windows store; keep Windows/root certificates current. Parent shell is unchanged.
 A fresh setup can resolve different transitive versions at a later date; keep
 the generated lock as the installed environment's audit record.
 

@@ -1,6 +1,6 @@
 [project]
 name = "portable-python-one-launcher"
-version = "0.1.0"
+version = "0.1.1"
 description = "General Windows target-resolved portable Python application"
 # This minimal profile uses one exact value for both runtime selection and
 # project compatibility. Choose another documented exact version before the
@@ -11,11 +11,11 @@ dependencies = []
 
 [tool.uv]
 package = false
-required-version = "==0.13.1"
+required-version = "==0.13.4"
 
 [tool.portable-python]
-uv-archive-sha256 = "3b2661a463a5baea7f5076ea2b25ab71d77f36a6c0d809e5350651792f80a672"
-uv-exe-sha256 = "4075a09490327d2bedfacc807fa48252fb93647c5bd7ef28f00e579160ea3fb5"
+uv-archive-sha256 = "ccec7508a07d9933d7cb1261880633efcf1f30d6e6eddab21823f1dae6f23225"
+uv-exe-sha256 = "b9d9656370ee1812e53e985d8bbb81870038106df98ef34cb45bcf4e0fe0df17"
 
 [[tool.uv.index]]
 name = "pypi"

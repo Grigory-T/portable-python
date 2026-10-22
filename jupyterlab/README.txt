@@ -8,12 +8,21 @@ This is a small Windows 11 x86-64 bootstrap for a project-local JupyterLab
 environment. The ZIP contains no uv executable, CPython, package wheels,
 virtual environment, lock file, cache, or user data. First start downloads and
 prepares everything from official sources. Later starts reuse the local state.
-Review revision: 2026-10-19. Extract this revision into a new folder; do not
+Review revision: 2026-10-22. Extract this revision into a new folder; do not
 overlay launchers on an older prepared environment.
 
 The user-library list is empty by default. JupyterLab and ipykernel are
 mandatory infrastructure in a separate dependency group; they are not counted
 as user notebook libraries.
+
+TRUST MODEL
+-----------
+Use trusted notebooks/packages in a private local folder, as a normal Windows
+user. Notebook/app code can access that user's files, network and inherited
+environment secrets. A venv and notebooks/ are not security sandboxes.
+First setup resolves the transitive graph live from PyPI; it is not a fixed,
+pre-audited graph inside the ZIP. Hashes check bytes, not package behavior.
+Do not copy generated config/runtime files from other environments.
 
 USER PROCEDURE
 --------------
@@ -27,8 +36,8 @@ Machine: target Windows 11 x86-64 machine with Internet access.
      tool.uv.required-version exact uv version (keep the supplied pin)
 3. Copy existing .ipynb files anywhere below notebooks/, or keep WELCOME.ipynb.
 4. Run START.bat.
-5. Wait for setup. JupyterLab starts in the foreground and opens the default
-   browser automatically.
+5. Wait for setup. JupyterLab starts in the foreground and requests opening the
+   default browser. If Windows does not open it, use the displayed local URL.
 6. Work only below notebooks/ in JupyterLab's file browser.
 7. Stop the server with JupyterLab File > Shut Down, or Ctrl+C in the console.
 8. Use START.bat for every later session.
@@ -68,6 +77,11 @@ workspace.lock, and portable-jupyter.log. Optional Matplotlib state is directed
 to matplotlib/ only if a notebook actually uses that library; it is not
 installed by default. python-bin/ is reserved and normally absent (--no-bin).
 Do not share runtime connection files: they contain authentication material.
+portable-server.json also contains a fresh random session token. It is written
+with Jupyter's secure-write helper, never passed in command-line arguments or
+copied to the diagnostic journal. Tokens rotate at every launcher invocation.
+Unexpected auto-loaded jupyter*_config.py/json files in the generated config
+directory cause a safe failure. Use fresh extraction, not custom base config.
 
 uv.lock records exact resolved packages, artifact URLs and hashes. ready.state
 records the selected Python/uv/Jupyter versions and hashes of pyproject.toml,
@@ -90,7 +104,7 @@ Preferred verified Windows x86-64 choices for this profile are:
   requires-python = "==3.11.17"
   requires-python = "==3.12.15"
 
-These exact builds were present in uv 0.13.1's managed-Python catalog when the
+These exact builds were present in uv 0.13.4's managed-Python catalog when the
 ZIP was built. The launcher also accepts another exact CPython 3.11-3.14 patch
 version when uv's pinned catalog supplies a Windows x86-64 build and Jupyter's
 dependencies resolve for it. Exact notation is required; ranges are rejected.
@@ -98,7 +112,7 @@ dependencies resolve for it. Exact notation is required; ranges are rejected.
 The supplied uv pin is standard metadata:
 
   [tool.uv]
-  required-version = "==0.13.1"
+  required-version = "==0.13.4"
 
 Its matching archive/executable hashes are in [tool.portable-python]. Changing
 uv requires independently verified matching hashes as well, not just a new
@@ -114,7 +128,7 @@ For example, to add spreadsheet/data libraries, the two sections should be:
 
   [project]
   name = "portable-python-jupyterlab"
-  version = "0.1.0"
+  version = "0.1.1"
   description = "General Windows target-resolved portable JupyterLab environment"
   requires-python = "==3.13.16"
   dependencies = ["openpyxl", "xlrd", "polars"]
@@ -284,18 +298,18 @@ do not publish that console or runtime files without reviewing them.
 OFFICIAL SOURCES AND VERIFICATION
 ---------------------------------
 
-uv 0.13.1:
+uv 0.13.4:
 
   release:
-    https://github.com/astral-sh/uv/releases/tag/0.13.1
+    https://github.com/astral-sh/uv/releases/tag/0.13.4
   Windows x86-64 archive:
-    https://releases.astral.sh/github/uv/releases/download/0.13.1/uv-x86_64-pc-windows-msvc.zip
+    https://releases.astral.sh/github/uv/releases/download/0.13.4/uv-x86_64-pc-windows-msvc.zip
   official checksum:
-    https://releases.astral.sh/github/uv/releases/download/0.13.1/uv-x86_64-pc-windows-msvc.zip.sha256
+    https://releases.astral.sh/github/uv/releases/download/0.13.4/uv-x86_64-pc-windows-msvc.zip.sha256
   pinned archive SHA-256:
-    3b2661a463a5baea7f5076ea2b25ab71d77f36a6c0d809e5350651792f80a672
+    ccec7508a07d9933d7cb1261880633efcf1f30d6e6eddab21823f1dae6f23225
   pinned extracted uv.exe SHA-256:
-    4075a09490327d2bedfacc807fa48252fb93647c5bd7ef28f00e579160ea3fb5
+    b9d9656370ee1812e53e985d8bbb81870038106df98ef34cb45bcf4e0fe0df17
 
 Managed CPython:
 
@@ -303,7 +317,7 @@ Managed CPython:
     https://github.com/astral-sh/python-build-standalone
   artifacts:
     https://releases.astral.sh/github/python-build-standalone/
-  exact default archive selected by uv 0.13.1:
+  exact default archive selected by uv 0.13.4:
     https://releases.astral.sh/github/python-build-standalone/releases/download/20261013/cpython-3.13.16%2B20261013-x86_64-pc-windows-msvc-install_only_stripped.tar.gz
   CPython reference (not an installer download by this tool):
     https://www.python.org/downloads/release/python-31316/
@@ -340,6 +354,10 @@ download test. Standard HTTP(S)_PROXY settings are retained; inherited UV_*
 source/runtime overrides are cleared. --no-config avoids unrelated uv settings,
 and --system-certs uses the Windows trust store. No insecure TLS bypass is used.
 If required official resources are inaccessible, setup fails explicitly.
+SSL_CERT_FILE/SSL_CERT_DIR and BROWSER are cleared only in the launcher process:
+trust comes from the current Windows certificate store; browser launch uses
+the platform default rather than an inherited command. Keep Windows/root
+certificates current. No global certificate or browser setting is modified.
 
 The ZIP contains no lock on purpose: new setups resolve at that time and can
 select different compatible transitive versions. uv.lock then records the local

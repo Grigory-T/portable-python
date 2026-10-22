@@ -9,7 +9,7 @@ $ProgressPreference = "SilentlyContinue"
 Set-StrictMode -Version 2.0
 
 $Mode = if ($SetupOnly) { "Setup" } else { "Start" }
-$ProfileSchema = "application-public-1"
+$ProfileSchema = "application-public-2"
 $UvVersion = "unknown"
 $UvArchiveUrl = ""
 $UvArchiveSha256 = ""
@@ -35,6 +35,9 @@ $WorkspaceLock = $null
 $LocalTemp = Join-Path $StateRoot "temp"
 
 function ConvertTo-NeutralText([string]$Text) {
+    # Upstream messages must not inject terminal controls or expose URL credentials.
+    $Text = [regex]::Replace($Text, '[\x00-\x08\x0B-\x1F\x7F-\x9F]', '')
+    $Text = [regex]::Replace($Text, '(?i)(https?://)[^\s/@]+@', '$1<redacted>@')
     foreach ($privatePath in @($Root, $env:USERPROFILE, $env:TEMP, $env:TMP)) {
         if ($privatePath) {
             $Text = [regex]::Replace($Text, [regex]::Escape($privatePath), "<local>", "IgnoreCase")
@@ -65,8 +68,8 @@ function Read-BootstrapSettings {
         throw 'tool.uv.required-version must be exactly "==x.y.z".'
     }
     $script:UvVersion = $Matches['version']
-    if ([version]$UvVersion -lt [version]'0.12.18') {
-        throw 'uv must be at least 0.12.18 (Windows wheel-extraction security fix).'
+    if ([version]$UvVersion -lt [version]'0.13.4') {
+        throw 'uv must be at least 0.13.4 (upstream security fixes).'
     }
     $script:UvArchiveSha256 = (Get-QuotedSetting "tool.portable-python" "uv-archive-sha256").ToLowerInvariant()
     $script:UvExeSha256 = (Get-QuotedSetting "tool.portable-python" "uv-exe-sha256").ToLowerInvariant()
@@ -85,6 +88,9 @@ function Set-PortableEnvironment {
     $env:UV_PROJECT_ENVIRONMENT = $VenvRoot
     $env:UV_PYTHON_INSTALL_DIR = $RuntimeRoot
     $env:UV_PYTHON_BIN_DIR = $RuntimeBin
+    # This profile deliberately trusts the Windows certificate store only.
+    $env:SSL_CERT_FILE = $null
+    $env:SSL_CERT_DIR = $null
     $env:PYTHONPATH = $null
     $env:PYTHONHOME = $null
     $env:PYTHONNOUSERSITE = "1"
@@ -113,7 +119,7 @@ function Write-PortableLog(
     if (-not $LocalRootApproved) { return }
     try {
         if (-not (Test-Path -LiteralPath $StateRoot -PathType Container)) {
-            New-Item -ItemType Directory -Force -Path $StateRoot | Out-Null
+            [System.IO.Directory]::CreateDirectory($StateRoot) | Out-Null
         }
         $record = [ordered]@{
             timestamp = [DateTime]::UtcNow.ToString("o")
@@ -200,7 +206,14 @@ function Download-VerifiedFile(
         if ($null -ne $defaultProxy) {
             $defaultProxy.Credentials = [System.Net.CredentialCache]::DefaultNetworkCredentials
         }
-        Invoke-WebRequest -UseBasicParsing -Uri $Url -OutFile $partial
+        # WebClient writes a literal filename; PS 5.1 -OutFile treats brackets as wildcards.
+        $client = New-Object System.Net.WebClient
+        try {
+            $client.Proxy = $defaultProxy
+            $client.DownloadFile($Url, $partial)
+        } finally {
+            $client.Dispose()
+        }
     } catch {
         if (Test-Path -LiteralPath $partial) {
             [System.IO.File]::Delete($partial)
@@ -252,7 +265,8 @@ function Install-VerifiedUv {
         if (Test-Path -LiteralPath $extractRoot) {
             [System.IO.Directory]::Delete($extractRoot, $true)
         }
-        Expand-Archive -LiteralPath $archive -DestinationPath $extractRoot
+        Add-Type -AssemblyName System.IO.Compression.FileSystem
+        [System.IO.Compression.ZipFile]::ExtractToDirectory($archive, $extractRoot)
         $extractedUv = Join-Path $extractRoot "uv.exe"
         if (-not (Test-Path -LiteralPath $extractedUv -PathType Leaf)) {
             throw "The verified uv archive does not contain uv.exe."
@@ -325,7 +339,7 @@ function Confirm-PreparedState(
     Confirm-ApprovedLockOrigins $LockPath
     $expectedBase = Join-Path $RuntimeRoot "$PythonRequest\python.exe"
     Invoke-Checked "runtime_check" $VenvPython @(
-        "-E", "-s", "-B", "-X", "utf8", "-c",
+        "-I", "-B", "-X", "utf8", "-c",
         "import pathlib,site,sys; actual='.'.join(map(str,sys.version_info[:3])); valid=actual==sys.argv[1] and not site.ENABLE_USER_SITE and pathlib.Path(sys._base_executable).resolve()==pathlib.Path(sys.argv[2]).resolve(); print('Python '+actual); print('Interpreter: project-local .venv'); raise SystemExit(0 if valid else 3)",
         $PythonVersion, $expectedBase
     )
@@ -460,8 +474,9 @@ print(f"Declared runtime dependencies: {len(dependencies)}")
     try {
         Set-Location -LiteralPath $Root
         Invoke-Checked "module_check" $VenvPython @(
-            "-E", "-s", "-B", "-X", "utf8", "-c",
-            "import importlib.util; spec=importlib.util.find_spec('application'); print('Module application: FOUND' if spec else 'Module application: NOT FOUND'); raise SystemExit(0 if spec else 4)"
+            "-I", "-B", "-X", "utf8", "-c",
+            "import importlib.util,sys; sys.path.insert(0,sys.argv[1]); spec=importlib.util.find_spec('application'); print('Module application: FOUND' if spec else 'Module application: NOT FOUND'); raise SystemExit(0 if spec else 4)",
+            $Root
         )
     } finally {
         Set-Location -LiteralPath $previousLocation
@@ -503,7 +518,9 @@ try {
         }
     }
 
-    New-Item -ItemType Directory -Force -Path $StateRoot, $LocalTemp | Out-Null
+    foreach ($directory in @($StateRoot, $LocalTemp)) {
+        [System.IO.Directory]::CreateDirectory($directory) | Out-Null
+    }
     try {
         $WorkspaceLock = [System.IO.File]::Open((Join-Path $StateRoot "workspace.lock"), 'OpenOrCreate', 'ReadWrite', 'None')
     } catch {

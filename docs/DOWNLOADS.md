@@ -3,30 +3,30 @@
 The target downloads executable/package artifacts; the release ZIPs contain
 only this project's text source, examples and license notices.
 
-## uv 0.13.1
+## uv 0.13.4
 
 Automatic bootstrap URL:
 
 ```text
-https://releases.astral.sh/github/uv/releases/download/0.13.1/uv-x86_64-pc-windows-msvc.zip
+https://releases.astral.sh/github/uv/releases/download/0.13.4/uv-x86_64-pc-windows-msvc.zip
 ```
 
 Pinned archive SHA-256:
 
 ```text
-3b2661a463a5baea7f5076ea2b25ab71d77f36a6c0d809e5350651792f80a672
+ccec7508a07d9933d7cb1261880633efcf1f30d6e6eddab21823f1dae6f23225
 ```
 
 Pinned extracted `uv.exe` SHA-256:
 
 ```text
-4075a09490327d2bedfacc807fa48252fb93647c5bd7ef28f00e579160ea3fb5
+b9d9656370ee1812e53e985d8bbb81870038106df98ef34cb45bcf4e0fe0df17
 ```
 
 Review references, not extra automatic downloads:
 
-- [Official release](https://github.com/astral-sh/uv/releases/tag/0.13.1)
-- [Official checksum](https://releases.astral.sh/github/uv/releases/download/0.13.1/uv-x86_64-pc-windows-msvc.zip.sha256)
+- [Official release](https://github.com/astral-sh/uv/releases/tag/0.13.4)
+- [Official checksum](https://releases.astral.sh/github/uv/releases/download/0.13.4/uv-x86_64-pc-windows-msvc.zip.sha256)
 
 The release's GitHub asset digest and downloaded archive checksum were compared;
 the executable hash was independently computed from the verified ZIP. The hashes
@@ -98,3 +98,11 @@ Unchanged application starts perform no infrastructure download. Jupyter's
 extension installer is read-only and built-in news/update polling is disabled.
 Notebook/application code and user-installed third-party packages can still
 make their own requests. The launcher is not a network sandbox.
+
+## Developer/CI advisory check only
+
+`scripts/audit.py` POSTs installed public PyPI package names and versions to
+`https://api.osv.dev/v1/querybatch` when Windows tests use `-Audit`. This is
+not part of the release ZIPs and is never called by START. It downloads advisory
+metadata, not executables, and fails rather than claiming a clean result if
+the response is unavailable or invalid. See [testing](TESTING.md).

@@ -23,9 +23,9 @@ PROFILES = {
          "notebooks/WELCOME.ipynb"],
     ),
 }
-UV_VERSION = "0.13.1"
-UV_ARCHIVE_SHA256 = "3b2661a463a5baea7f5076ea2b25ab71d77f36a6c0d809e5350651792f80a672"
-UV_EXE_SHA256 = "4075a09490327d2bedfacc807fa48252fb93647c5bd7ef28f00e579160ea3fb5"
+UV_VERSION = "0.13.4"
+UV_ARCHIVE_SHA256 = "ccec7508a07d9933d7cb1261880633efcf1f30d6e6eddab21823f1dae6f23225"
+UV_EXE_SHA256 = "b9d9656370ee1812e53e985d8bbb81870038106df98ef34cb45bcf4e0fe0df17"
 
 
 def check_profile(name, files):
@@ -35,7 +35,7 @@ def check_profile(name, files):
         raise ValueError(f"Unexpected or linked source files in {name}: {actual ^ set(files)}")
     metadata = tomllib.loads((source / "pyproject.toml").read_text(encoding="utf-8"))
     project = metadata["project"]
-    assert project["version"] == "0.1.0"
+    assert project["version"] == "0.1.1"
     assert project["requires-python"] == "==3.13.16"
     assert project["dependencies"] == []
     assert metadata["tool"]["uv"]["required-version"] == f"=={UV_VERSION}"
@@ -96,7 +96,7 @@ def build(profile, output):
     with zipfile.ZipFile(destination, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=9) as archive:
         for name, path in entries:
             assert not name.startswith("/") and ".." not in Path(name).parts
-            info = zipfile.ZipInfo(name, date_time=(2026, 10, 19, 0, 0, 0))
+            info = zipfile.ZipInfo(name, date_time=(2026, 10, 22, 0, 0, 0))
             info.create_system = 3  # Fixed ZIP host metadata across build platforms.
             info.compress_type = zipfile.ZIP_DEFLATED
             info.external_attr = 0o100644 << 16

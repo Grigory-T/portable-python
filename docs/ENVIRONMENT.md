@@ -26,7 +26,7 @@ Their wider support is not this project's support promise.
 ## Host software and permissions
 
 - Required Windows components: `cmd.exe`, 64-bit Windows PowerShell 5.1, its
-  .NET Framework, the archive cmdlet `Expand-Archive`, normal Windows system
+  .NET Framework (including ZIP support), normal Windows system
   APIs/DLLs, DNS, TLS and a valid certificate store. BITS/Negotiate is an optional
   fallback for downloading uv, not a requirement for a working direct download.
 - START uses the explicit system Windows PowerShell path, not PowerShell 7.
