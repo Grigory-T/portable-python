@@ -16,15 +16,32 @@ It does not download or execute uv/CPython. SHA-256 is printed for release notes
 ## Windows acceptance
 
 Machine: a Windows 11 AMD64 test machine with Internet access. These tests run
-code, download official binaries/wheels, create local temporary folders, and
-retain their generated test folders for inspection. No production data is used.
+code and download official binaries/wheels. No production data is used.
+Expanded test workspaces live under the checkout's `.test-workspaces/`, never
+under user/system Temp. Both tests remove their own generated workspace in
+`finally` after stopping owned processes, on success and failure (including bad
+ZIP input). Cleanup failure fails the test. Success is printed after cleanup.
+
+An interrupted or explicitly retained workspace blocks the next test of the
+same profile until it has been reviewed/removed. Do not repeatedly create fresh
+environments around leftovers. Tests delete only an exact owned run directory,
+with parent/name/ownership-marker checks; there is no general Temp cleanup.
 
 After building, from the repository root in PowerShell:
 
 ```powershell
+.\tests\workspace-cleanup.ps1
 .\tests\application.ps1 -Zip .\dist\portable-python-one-launcher-0.1.2-windows-x86_64.zip -Audit
 .\tests\jupyterlab.ps1 -Zip .\dist\portable-python-jupyterlab-0.1.2-windows-x86_64.zip -Audit
 ```
+
+For an explicit debugging need only, `-KeepWorkspace` retains that run outside
+Temp and prints its location. Stop all owned processes, keep only necessary
+redacted evidence, and remove the retained test directory after diagnosis.
+Do not copy environments/caches into Temp. A forced process kill or power loss
+can bypass finally; inspect/remove that owned workspace before rerunning.
+CI verifies cleanup guards, failure-path removal and ordinary full-run cleanup.
+These test changes are not shipped in the user ZIPs and do not change START.
 
 Application checks: fresh setup/run, empty-library default, Unicode path,
 unchanged start, actual START.bat, nested absolute/relative imports, original

@@ -15,6 +15,9 @@ jobs:
           persist-credentials: false
       - name: Build the source-only ZIPs
         run: python scripts/build.py
+      - name: Workspace cleanup safeguards
+        shell: powershell
+        run: ./tests/workspace-cleanup.ps1
       - name: Application acceptance
         shell: powershell
         run: ./tests/application.ps1 -Zip ./dist/portable-python-one-launcher-0.1.2-windows-x86_64.zip -Audit

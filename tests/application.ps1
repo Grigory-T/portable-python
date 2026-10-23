@@ -1,7 +1,9 @@
-param([Parameter(Mandatory=$true)][string]$Zip, [switch]$Audit)
+param([Parameter(Mandatory=$true)][string]$Zip, [switch]$Audit, [switch]$KeepWorkspace)
 $ErrorActionPreference = 'Stop'
 $utf8 = New-Object Text.UTF8Encoding($false)
-$testRoot = Join-Path $env:TEMP ('portable-app acceptance (' + [guid]::NewGuid().ToString('N') + ')')
+. (Join-Path $PSScriptRoot 'workspace.ps1')
+$testRoot = New-TestWorkspace 'application'
+try {
 $folderName = -join ([char[]]@(0x0075,0x006e,0x0069,0x0063,0x006f,0x0064,0x0065,0x002d,0x00e9))
 $root = Join-Path $testRoot ($folderName + ' [literal]')
 New-Item -ItemType Directory -Path $root -Force | Out-Null
@@ -79,5 +81,7 @@ if ($Audit) {
     & (Join-Path $root '.venv\Scripts\python.exe') -I (Join-Path $PSScriptRoot '..\scripts\audit.py')
     if ($LASTEXITCODE -ne 0) { throw 'Advisory check failed' }
 }
+} finally {
+    Complete-TestWorkspace -Path $testRoot -KeepWorkspace:$KeepWorkspace
+}
 Write-Host 'WINDOWS ONE-LAUNCHER ACCEPTANCE: SUCCESS'
-Write-Host "Retained test workspace: $testRoot"

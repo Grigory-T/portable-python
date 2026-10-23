@@ -1,7 +1,11 @@
-param([Parameter(Mandatory=$true)][string]$Zip, [switch]$Audit)
+param([Parameter(Mandatory=$true)][string]$Zip, [switch]$Audit, [switch]$KeepWorkspace)
 $ErrorActionPreference = 'Stop'
 $utf8 = New-Object Text.UTF8Encoding($false)
-$testRoot = Join-Path $env:TEMP ('portable-jupyter acceptance (' + [guid]::NewGuid().ToString('N') + ')')
+. (Join-Path $PSScriptRoot 'workspace.ps1')
+$testRoot = New-TestWorkspace 'jupyterlab'
+$server = $null
+$script:serverInfo = $null
+try {
 # Build the Unicode folder name independently of the PowerShell source encoding.
 $folderName = -join ([char[]]@(0x0075,0x006e,0x0069,0x0063,0x006f,0x0064,0x0065,0x002d,0x00e9))
 $root = Join-Path $testRoot ($folderName + ' [literal]')
@@ -11,8 +15,6 @@ Add-Type -AssemblyName System.IO.Compression.FileSystem
 $launcher = Join-Path $root 'portable-jupyter.ps1'
 $projectPath = Join-Path $root 'pyproject.toml'
 $venvPython = Join-Path $root '.venv\Scripts\python.exe'
-$server = $null
-$script:serverInfo = $null
 
 function Write-ServerDiagnostics {
     foreach ($name in @('server.stdout', 'server.stderr')) {
@@ -48,7 +50,6 @@ function Invoke-Profile([int]$Expected = 0) {
     if ($code -ne $Expected) { throw "Expected exit $Expected, got $code" }
 }
 
-try {
     # An inherited alternate uv source must not affect the profile.
     $env:UV_INDEX = 'https://invalid.invalid/simple'
     $env:SSL_CERT_FILE = 'C:\invalid-portable-test\ca.pem'
@@ -252,9 +253,8 @@ api("shutdown", "POST", {})
         & $venvPython -I (Join-Path $PSScriptRoot '..\scripts\audit.py')
         if ($LASTEXITCODE -ne 0) { throw 'Advisory check failed' }
     }
-    Write-Host 'WINDOWS JUPYTERLAB ACCEPTANCE: SUCCESS'
-    Write-Host "Retained test workspace: $testRoot"
 } finally {
+    try {
     if ($null -ne $server -and -not $server.HasExited) {
         if ($script:serverInfo) {
             try { Invoke-RestMethod -Uri ($script:serverInfo.url + 'api/shutdown') -Method Post -TimeoutSec 5 -Headers @{Authorization=('token ' + $script:serverInfo.token)} | Out-Null } catch { }
@@ -262,6 +262,11 @@ api("shutdown", "POST", {})
         if (-not $server.WaitForExit(10000)) {
             # Cleanup only this test-created process tree; a forced kill never passes the test.
             & taskkill.exe /PID $server.Id /T /F 2>&1 | Out-Null
+            if (-not $server.WaitForExit(10000)) { throw 'Owned test process did not stop; cleanup is not complete' }
         }
     }
+    } finally {
+        Complete-TestWorkspace -Path $testRoot -KeepWorkspace:$KeepWorkspace
+    }
 }
+Write-Host 'WINDOWS JUPYTERLAB ACCEPTANCE: SUCCESS'
