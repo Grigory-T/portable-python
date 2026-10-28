@@ -8,7 +8,7 @@ This is a small Windows 11 x86-64 bootstrap for a project-local JupyterLab
 environment. The ZIP contains no uv executable, CPython, package wheels,
 virtual environment, lock file, cache, or user data. First start downloads and
 prepares everything from official sources. Later starts reuse the local state.
-Review revision: 2026-10-22. Extract this revision into a new folder; do not
+Review revision: 2026-10-28. Extract this revision into a new folder; do not
 overlay launchers on an older prepared environment.
 
 The user-library list is empty by default. JupyterLab and ipykernel are
@@ -100,15 +100,15 @@ PYTHON VERSION
 
 The exact selection is the standard [project] field in pyproject.toml:
 
-  requires-python = "==3.13.16"
+  requires-python = "==3.13.18"
 
 Preferred verified Windows x86-64 choices for this profile are:
 
-  requires-python = "==3.13.16"   default
-  requires-python = "==3.11.17"
-  requires-python = "==3.12.15"
+  requires-python = "==3.13.18"   default
+  requires-python = "==3.11.18"
+  requires-python = "==3.12.16"
 
-These exact builds were present in uv 0.13.4's managed-Python catalog when the
+These exact builds were present in uv 0.13.6's managed-Python catalog when the
 ZIP was built. The launcher also accepts another exact CPython 3.11-3.14 patch
 version when uv's pinned catalog supplies a Windows x86-64 build and Jupyter's
 dependencies resolve for it. Exact notation is required; ranges are rejected.
@@ -116,7 +116,7 @@ dependencies resolve for it. Exact notation is required; ranges are rejected.
 The supplied uv pin is standard metadata:
 
   [tool.uv]
-  required-version = "==0.13.4"
+  required-version = "==0.13.6"
 
 Its matching archive/executable hashes are in [tool.portable-python]. Changing
 uv requires independently verified matching hashes as well, not just a new
@@ -134,7 +134,7 @@ For example, to add spreadsheet/data libraries, the two sections should be:
   name = "portable-python-jupyterlab"
   version = "0.1.1"
   description = "General Windows target-resolved portable JupyterLab environment"
-  requires-python = "==3.13.16"
+  requires-python = "==3.13.18"
   dependencies = ["openpyxl", "xlrd", "polars"]
 
   [dependency-groups]
@@ -313,18 +313,18 @@ do not publish that console or runtime files without reviewing them.
 OFFICIAL SOURCES AND VERIFICATION
 ---------------------------------
 
-uv 0.13.4:
+uv 0.13.6:
 
   release:
-    https://github.com/astral-sh/uv/releases/tag/0.13.4
+    https://github.com/astral-sh/uv/releases/tag/0.13.6
   Windows x86-64 archive:
-    https://releases.astral.sh/github/uv/releases/download/0.13.4/uv-x86_64-pc-windows-msvc.zip
+    https://releases.astral.sh/github/uv/releases/download/0.13.6/uv-x86_64-pc-windows-msvc.zip
   official checksum:
-    https://releases.astral.sh/github/uv/releases/download/0.13.4/uv-x86_64-pc-windows-msvc.zip.sha256
+    https://releases.astral.sh/github/uv/releases/download/0.13.6/uv-x86_64-pc-windows-msvc.zip.sha256
   pinned archive SHA-256:
-    ccec7508a07d9933d7cb1261880633efcf1f30d6e6eddab21823f1dae6f23225
+    a2a8820d5eea32f08ef467ef3b7f66883a9b076d5737a2fc2fbb5f458d1bb50f
   pinned extracted uv.exe SHA-256:
-    b9d9656370ee1812e53e985d8bbb81870038106df98ef34cb45bcf4e0fe0df17
+    81ea623608f8c17720c62efd0a380a8ead380c4d365ba6968e9d279a2319c674
 
 Managed CPython:
 
@@ -332,10 +332,10 @@ Managed CPython:
     https://github.com/astral-sh/python-build-standalone
   artifacts:
     https://releases.astral.sh/github/python-build-standalone/
-  exact default archive selected by uv 0.13.4:
-    https://releases.astral.sh/github/python-build-standalone/releases/download/20261013/cpython-3.13.16%2B20261013-x86_64-pc-windows-msvc-install_only_stripped.tar.gz
+  exact default archive selected by uv 0.13.6:
+    https://releases.astral.sh/github/python-build-standalone/releases/download/20261026/cpython-3.13.18%2B20261026-x86_64-pc-windows-msvc-install_only_stripped.tar.gz
   CPython reference (not an installer download by this tool):
-    https://www.python.org/downloads/release/python-31316/
+    https://www.python.org/downloads/release/python-31318/
 
 uv selects and verifies the managed-Python distribution. The launcher rejects
 selected Python URLs outside HTTPS releases.astral.sh and prints the exact URL.

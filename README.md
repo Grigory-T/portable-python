@@ -18,8 +18,8 @@ can take several minutes; unchanged later starts skip package setup.
 
 | ZIP | Purpose | Put your code here |
 |---|---|---|
-| `portable-python-one-launcher-0.1.2-windows-x86_64.zip` | Ordinary Python application | `application/`; entry point `__main__.py` |
-| `portable-python-jupyterlab-0.1.2-windows-x86_64.zip` | Interactive notebooks | `notebooks/`; create or copy `.ipynb` files |
+| `portable-python-one-launcher-0.1.3-windows-x86_64.zip` | Ordinary Python application | `application/`; entry point `__main__.py` |
+| `portable-python-jupyterlab-0.1.3-windows-x86_64.zip` | Interactive notebooks | `notebooks/`; create or copy `.ipynb` files |
 
 Both are usable immediately. The application example uses only the standard
 library. The notebook example checks its actual interpreter and directory.
@@ -56,18 +56,26 @@ See [environment details and limitations](docs/ENVIRONMENT.md).
 
 ## Python and libraries
 
-Default pins: **CPython 3.13.16**, **uv 0.13.4**; the notebook edition adds
+Default pins: **CPython 3.13.18**, **uv 0.13.6**; the notebook edition adds
 **JupyterLab 4.6.4** and **ipykernel 7.4.0**. The user-library list is empty.
 These are deliberately selected/tested pins, not an auto-update mechanism.
+
+Version policy: keep the mature Python 3.13 line while it remains suitable and
+security-supported; review security patch releases rather than freezing a patch
+forever. The current baseline is uv 0.13.6 + CPython 3.13.18, including upstream
+certificate-security fixes. Neither pin is an LTS guarantee or proof of zero
+vulnerabilities. Future changes require official checksum verification and both
+Windows acceptance suites. Do not self-update the pinned project-local uv.
+See the [version review](docs/SECURITY-REVIEW.md).
 
 Before first start, edit the supplied `pyproject.toml`, retaining its metadata:
 
 ```toml
 [project]
 name = "portable-python-one-launcher"
-version = "0.1.2"
+version = "0.1.3"
 description = "General Windows portable Python application"
-requires-python = "==3.13.16"
+requires-python = "==3.13.18"
 dependencies = ["openpyxl", "xlrd", "polars"]
 ```
 
@@ -140,7 +148,7 @@ not deliberately copied into those journals.
   security/proxy policy is made. See [security policy](SECURITY.md).
 
 See the [review decisions](docs/SECURITY-REVIEW.md) for fixes, accepted tradeoffs
-and the limits of the security claims. Use a fresh extraction for v0.1.2;
+and the limits of the security claims. Use a fresh extraction for v0.1.3;
 do not overwrite an older prepared environment.
 
 ## Source layout and development

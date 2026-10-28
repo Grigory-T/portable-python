@@ -191,7 +191,7 @@ for _ in range(60):
 ws_url = info["url"].replace("http://", "ws://") + "api/kernels/" + session["kernel"]["id"] + "/channels?token=" + info["token"]
 channel = websocket.create_connection(ws_url, timeout=45, origin=info["url"].rstrip("/"), http_no_proxy=["127.0.0.1", "localhost"])
 try:
-    code = "import os,pathlib,site,sys,openpyxl,polars as pl; assert pl.DataFrame(dict(x=[1,2])).select(pl.col('x').sum()).item()==3; assert not any(k in os.environ for k in ('SSL_CERT_FILE','SSL_CERT_DIR','BROWSER')); assert sys.version_info[:3]==(3,13,16); assert pathlib.Path(sys.prefix).resolve()==pathlib.Path(" + repr(str(root / ".venv")) + ").resolve(); assert not site.ENABLE_USER_SITE; assert pathlib.Path.cwd().resolve()==pathlib.Path(" + repr(str(root / "notebooks" / "nested")) + ").resolve(); print('LOCAL KERNEL EXECUTION AND POLARS COMPUTE SUCCESS')"
+    code = "import os,pathlib,site,sys,openpyxl,polars as pl; assert pl.DataFrame(dict(x=[1,2])).select(pl.col('x').sum()).item()==3; assert not any(k in os.environ for k in ('SSL_CERT_FILE','SSL_CERT_DIR','BROWSER')); assert sys.version_info[:3]==(3,13,18); assert pathlib.Path(sys.prefix).resolve()==pathlib.Path(" + repr(str(root / ".venv")) + ").resolve(); assert not site.ENABLE_USER_SITE; assert pathlib.Path.cwd().resolve()==pathlib.Path(" + repr(str(root / "notebooks" / "nested")) + ").resolve(); print('LOCAL KERNEL EXECUTION AND POLARS COMPUTE SUCCESS')"
     msg_id = uuid.uuid4().hex
     request = {"header": {"msg_id": msg_id, "username": "test", "session": uuid.uuid4().hex,
         "msg_type": "execute_request", "version": "5.3", "date": datetime.now(timezone.utc).isoformat()},

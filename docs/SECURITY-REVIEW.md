@@ -1,8 +1,30 @@
 # Security review decisions
 
-Review date: 2026-10-22. Scope: both launchers, normal `.py` execution, generated
+Review date: 2026-10-28. Scope: both launchers, normal `.py` execution, generated
 config, download trust, tests and release delivery. This is a limited engineering
 review, not a certification, penetration test or guarantee of harmless dependencies.
+
+## Security baseline v0.1.3 (2026-10-28)
+
+- Pin uv **0.13.6** and CPython **3.13.18** for both tools. Verify the official
+  uv archive digest/checksum and extracted executable hash. Confirm the default
+  Windows CPython record and checksum against the pinned uv catalog and provider
+  asset. Keep downloads, versions and hashes explicit in TOML and download docs.
+- CPython 3.13.18 is the October 25 security release: it blocks compromised
+  eMudhra intermediate CA keys in ssl and contains additional Expat, Windows
+  mimetypes, tarfile and other fixes. uv 0.13.6 includes this managed runtime and
+  inherits uv 0.13.5's compromised-intermediate certificate-chain rejection.
+  Sources: [CPython release](https://www.python.org/downloads/release/python-31318/),
+  [uv 0.13.5](https://github.com/astral-sh/uv/releases/tag/0.13.5),
+  [uv 0.13.6](https://github.com/astral-sh/uv/releases/tag/0.13.6).
+- The older proposed uv 0.13.5 + CPython 3.13.17 pair is compatible but is not
+  the chosen security baseline. Python 3.13 is a mature security-only branch;
+  use tested patch updates, not a claim of permanent safety or official LTS.
+- Keep application/Jupyter behavior, pinned Jupyter infrastructure, dynamic
+  target-local libraries, authentication, full token URL and offline package
+  checks unchanged. Windows tests verify the new interpreter in real app/kernel
+  execution. Repeated full tests use ephemeral CI with owned-workspace cleanup,
+  not retained environments in user/system Temp. No host recovery data is touched.
 
 ## Reliability correction in v0.1.2
 

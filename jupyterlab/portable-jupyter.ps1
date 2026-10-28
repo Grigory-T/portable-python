@@ -75,8 +75,8 @@ function Read-BootstrapSettings {
         throw 'tool.uv.required-version must be exactly "==x.y.z".'
     }
     $script:UvVersion = $Matches['version']
-    if ([version]$UvVersion -lt [version]'0.13.4') {
-        throw 'uv must be at least 0.13.4 (upstream security fixes).'
+    if ([version]$UvVersion -lt [version]'0.13.6') {
+        throw 'uv must be at least 0.13.6 (reviewed security baseline).'
     }
     $script:UvArchiveSha256 = (Get-QuotedSetting "tool.portable-python" "uv-archive-sha256").ToLowerInvariant()
     $script:UvExeSha256 = (Get-QuotedSetting "tool.portable-python" "uv-exe-sha256").ToLowerInvariant()

@@ -123,7 +123,7 @@ CI additionally checks its installed package versions against OSV; failure or
 service unavailability is not called clean. This check is not run by START and
 does not certify any later/user-modified graph.
 
-The initial public release used uv **0.13.1**. Current v0.1.2 pins **0.13.4**
+The initial public release used uv **0.13.1**. Current v0.1.3 pins **0.13.6**
 and refuses older versions. Versions 0.12.7 through 0.12.17 had a Windows
 wheel-extraction vulnerability. See
 [GHSA-2cv4-cqwr-gwf7](https://github.com/astral-sh/uv/security/advisories/GHSA-2cv4-cqwr-gwf7).
@@ -132,7 +132,13 @@ uv 0.13.4 also removes the compromised emSign CA from its bundled set; see
 These launchers use Windows system trust, which must independently be updated.
 JupyterLab is pinned to **4.6.4**, which fixes the 4.6.3 advisory set; see the
 [upstream security page](https://github.com/jupyterlab/jupyterlab/security).
-CPython **3.13.16** is the selected maintained security patch release.
+CPython **3.13.18** is the selected security patch release. It adds distrust of
+compromised eMudhra intermediate keys in ssl and further security fixes; see the
+[official release](https://www.python.org/downloads/release/python-31318/).
+uv 0.13.6 includes the updated managed-Python catalog and the earlier uv 0.13.5
+certificate-chain rejection fix. The 3.13 line is security-only, not an LTS
+promise or a guarantee that an exact patch remains safe indefinitely. Review
+future security patches and retest rather than indefinitely freezing these pins.
 
 Before updating pins: inspect upstream advisories/licenses, independently check
 published artifact checksums, inspect the uv catalog, test compatible Windows

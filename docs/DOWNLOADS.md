@@ -3,50 +3,59 @@
 The target downloads executable/package artifacts; the release ZIPs contain
 only this project's text source, examples and license notices.
 
-## uv 0.13.4
+## uv 0.13.6
 
 Automatic bootstrap URL:
 
 ```text
-https://releases.astral.sh/github/uv/releases/download/0.13.4/uv-x86_64-pc-windows-msvc.zip
+https://releases.astral.sh/github/uv/releases/download/0.13.6/uv-x86_64-pc-windows-msvc.zip
 ```
 
 Pinned archive SHA-256:
 
 ```text
-ccec7508a07d9933d7cb1261880633efcf1f30d6e6eddab21823f1dae6f23225
+a2a8820d5eea32f08ef467ef3b7f66883a9b076d5737a2fc2fbb5f458d1bb50f
 ```
 
 Pinned extracted `uv.exe` SHA-256:
 
 ```text
-b9d9656370ee1812e53e985d8bbb81870038106df98ef34cb45bcf4e0fe0df17
+81ea623608f8c17720c62efd0a380a8ead380c4d365ba6968e9d279a2319c674
 ```
 
 Review references, not extra automatic downloads:
 
-- [Official release](https://github.com/astral-sh/uv/releases/tag/0.13.4)
-- [Official checksum](https://releases.astral.sh/github/uv/releases/download/0.13.4/uv-x86_64-pc-windows-msvc.zip.sha256)
+- [Official release](https://github.com/astral-sh/uv/releases/tag/0.13.6)
+- [Official checksum](https://releases.astral.sh/github/uv/releases/download/0.13.6/uv-x86_64-pc-windows-msvc.zip.sha256)
 
 The release's GitHub asset digest and downloaded archive checksum were compared;
 the executable hash was independently computed from the verified ZIP. The hashes
 are in each TOML and the release builder. Runtime does not trust a newly
 downloaded checksum beside an arbitrary archive.
 
-## CPython 3.13.16
+## CPython 3.13.18
 
 The default exact Windows x86-64 distribution in the pinned uv catalog is:
 
 ```text
-https://releases.astral.sh/github/python-build-standalone/releases/download/20261013/cpython-3.13.16%2B20261013-x86_64-pc-windows-msvc-install_only_stripped.tar.gz
+https://releases.astral.sh/github/python-build-standalone/releases/download/20261026/cpython-3.13.18%2B20261026-x86_64-pc-windows-msvc-install_only_stripped.tar.gz
 ```
+
+Default archive SHA-256 (uv 0.13.6 catalog and official provider asset digest):
+
+```text
+7369f7a35f261222a6ac8b3a87c1c88eeebee8af945d85346202591a64038dd3
+```
+
+[Pinned uv catalog](https://github.com/astral-sh/uv/blob/0.13.6/crates/uv-python-managed/download-metadata.json)
+and [provider release](https://github.com/astral-sh/python-build-standalone/releases/tag/20261026).
 
 uv supplies its embedded distribution checksum and verifies the download. The
 launcher requires a single exact Windows AMD64 record and an HTTPS
 `releases.astral.sh` origin. It prints that URL before installation. Runtime
 and venv stay under the project; no global command/registry entry is installed.
 
-References: [Python release](https://www.python.org/downloads/release/python-31316/),
+References: [Python release](https://www.python.org/downloads/release/python-31318/),
 [build provider](https://github.com/astral-sh/python-build-standalone),
 [uv managed Python](https://docs.astral.sh/uv/guides/install-python/).
 

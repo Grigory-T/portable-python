@@ -31,8 +31,8 @@ After building, from the repository root in PowerShell:
 
 ```powershell
 .\tests\workspace-cleanup.ps1
-.\tests\application.ps1 -Zip .\dist\portable-python-one-launcher-0.1.2-windows-x86_64.zip -Audit
-.\tests\jupyterlab.ps1 -Zip .\dist\portable-python-jupyterlab-0.1.2-windows-x86_64.zip -Audit
+.\tests\application.ps1 -Zip .\dist\portable-python-one-launcher-0.1.3-windows-x86_64.zip -Audit
+.\tests\jupyterlab.ps1 -Zip .\dist\portable-python-jupyterlab-0.1.3-windows-x86_64.zip -Audit
 ```
 
 For an explicit debugging need only, `-KeepWorkspace` retains that run outside

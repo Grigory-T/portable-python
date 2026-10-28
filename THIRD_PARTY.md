@@ -10,8 +10,8 @@ Those components are fetched directly from upstream during setup.
 
 | Component | Default | Upstream license / reference |
 |---|---|---|
-| uv | 0.13.4 | Apache-2.0 OR MIT; [upstream license](https://github.com/astral-sh/uv#license) |
-| CPython | 3.13.16 | PSF license agreement and included third-party notices; [Python licensing](https://docs.python.org/3.13/license.html) |
+| uv | 0.13.6 | Apache-2.0 OR MIT; [upstream license](https://github.com/astral-sh/uv#license) |
+| CPython | 3.13.18 | PSF license agreement and included third-party notices; [Python licensing](https://docs.python.org/3.13/license.html) |
 | python-build-standalone | selected through pinned uv | Build-system source is MPL-2.0; binary distributions have CPython and bundled-library terms, not one blanket MPL license; [build source](https://github.com/astral-sh/python-build-standalone/blob/main/LICENSE), [distribution metadata](https://github.com/astral-sh/python-build-standalone/blob/main/docs/distributions.rst) |
 | JupyterLab | 4.6.4 | BSD-3-Clause; [upstream license](https://github.com/jupyterlab/jupyterlab/blob/v4.6.4/LICENSE) |
 | ipykernel | 7.4.0 | BSD-3-Clause; [upstream license](https://github.com/ipython/ipykernel/blob/v7.4.0/LICENSE) |

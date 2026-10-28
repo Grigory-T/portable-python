@@ -60,7 +60,7 @@ if ($lastOutput -match 'APPLICATION RUN') { throw 'Application started with chan
 & cmd.exe /d /c ('echo x|call "' + (Join-Path $root 'START.bat') + '"')
 if ($LASTEXITCODE -ne 0) { throw 'START.bat failed' }
 $venvPython = Join-Path $root '.venv\Scripts\python.exe'
-& $venvPython -I -c "import importlib.util,site,sys; assert sys.version_info[:3]==(3,13,16); assert not site.ENABLE_USER_SITE; assert importlib.util.find_spec('jupyterlab') is None; assert importlib.util.find_spec('matplotlib') is None"
+& $venvPython -I -c "import importlib.util,site,sys; assert sys.version_info[:3]==(3,13,18); assert not site.ENABLE_USER_SITE; assert importlib.util.find_spec('jupyterlab') is None; assert importlib.util.find_spec('matplotlib') is None"
 if ($LASTEXITCODE -ne 0) { throw 'Unexpected runtime/default libraries' }
 $log = [IO.File]::ReadAllText((Join-Path $root '.portable-python\portable-python.log'))
 if ($log.IndexOf($env:USERNAME, [StringComparison]::OrdinalIgnoreCase) -ge 0) { throw 'Identity in journal' }

@@ -1,6 +1,6 @@
 PORTABLE PYTHON - APPLICATION PROFILE
 =====================================
-Review revision: 2026-10-22. Main template for ordinary Python applications.
+Review revision: 2026-10-28. Main template for ordinary Python applications.
 Extract freshly; do not overlay an older prepared environment.
 
 QUICK START
@@ -44,10 +44,10 @@ is created by the framework; data paths are an application decision.
 
 PYTHON / PACKAGES
 -----------------
-The defaults are CPython 3.13.16, uv 0.13.4, and NO third-party packages.
+The defaults are CPython 3.13.18, uv 0.13.6, and NO third-party packages.
 
 Edit only the intended values under [project], for example:
-  requires-python = "==3.13.16"
+  requires-python = "==3.13.18"
   dependencies = ["openpyxl", "xlrd", "polars"]
 
 Or:
@@ -66,13 +66,13 @@ Only ordinary PyPI requirements and compatible wheels are accepted, not direct
 URLs/paths, extra groups, custom indexes, uv sources, or source builds.
 
 Verified managed-Python choices in this uv catalog:
-  requires-python = "==3.13.16"   default
-  requires-python = "==3.12.15"
-  requires-python = "==3.11.17"
+  requires-python = "==3.13.18"   default
+  requires-python = "==3.12.16"
+  requires-python = "==3.11.18"
 Other exact CPython 3.11-3.14 patches work only if present in this pinned catalog
 and compatible with your libraries. Ranges are not valid runtime selections.
 
-[tool.uv].required-version = "==0.13.4" is the exact uv pin. The matching archive
+[tool.uv].required-version = "==0.13.6" is the exact uv pin. The matching archive
 and executable hashes live in [tool.portable-python]. Keep supplied pins unless
 you have independently verified replacement versions/hashes. These are tested
 pins, not a promise that they are the latest releases or vulnerability-free.
@@ -168,20 +168,20 @@ Console has separate PORTABLE PYTHON RESULT and APPLICATION RESULT blocks.
 OFFICIAL INTERNET SOURCES / VERIFICATION
 ----------------------------------------
 uv executable archive:
-  https://releases.astral.sh/github/uv/releases/download/0.13.4/uv-x86_64-pc-windows-msvc.zip
+  https://releases.astral.sh/github/uv/releases/download/0.13.6/uv-x86_64-pc-windows-msvc.zip
 Archive SHA-256:
-  ccec7508a07d9933d7cb1261880633efcf1f30d6e6eddab21823f1dae6f23225
+  a2a8820d5eea32f08ef467ef3b7f66883a9b076d5737a2fc2fbb5f458d1bb50f
 Extracted uv.exe SHA-256:
-  b9d9656370ee1812e53e985d8bbb81870038106df98ef34cb45bcf4e0fe0df17
+  81ea623608f8c17720c62efd0a380a8ead380c4d365ba6968e9d279a2319c674
 Review references (not automatic extra downloads):
-  https://github.com/astral-sh/uv/releases/tag/0.13.4
-  https://releases.astral.sh/github/uv/releases/download/0.13.4/uv-x86_64-pc-windows-msvc.zip.sha256
+  https://github.com/astral-sh/uv/releases/tag/0.13.6
+  https://releases.astral.sh/github/uv/releases/download/0.13.6/uv-x86_64-pc-windows-msvc.zip.sha256
 
 Default CPython archive from uv's embedded catalog:
-  https://releases.astral.sh/github/python-build-standalone/releases/download/20261013/cpython-3.13.16%2B20261013-x86_64-pc-windows-msvc-install_only_stripped.tar.gz
+  https://releases.astral.sh/github/python-build-standalone/releases/download/20261026/cpython-3.13.18%2B20261026-x86_64-pc-windows-msvc-install_only_stripped.tar.gz
 Provider/reference:
   https://github.com/astral-sh/python-build-standalone
-  https://www.python.org/downloads/release/python-31316/
+  https://www.python.org/downloads/release/python-31318/
 
 Package index/metadata:
   https://pypi.org/simple
