@@ -1,8 +1,25 @@
 # Security review decisions
 
-Review date: 2026-10-28. Scope: both launchers, normal `.py` execution, generated
+Review date: 2026-10-29. Scope: both launchers, normal `.py` execution, generated
 config, download trust, tests and release delivery. This is a limited engineering
 review, not a certification, penetration test or guarantee of harmless dependencies.
+
+## Unified UTF-8 output v0.1.4 (2026-10-29)
+
+- Keep the tested uv 0.13.6 / CPython 3.13.18 pins, hashes and download policy.
+- Both launchers set Console.OutputEncoding to UTF-8 before native calls and
+  restore the original value in an outer finally spanning setup and execution.
+  Python already uses -X utf8. No persistent profile/registry/region changes,
+  environment-wide overrides or global replacement-character policy are added.
+- The receiver must decode the producer's bytes correctly. Reconfiguring
+  Python stdout again does not fix PowerShell decoding UTF-8 as a legacy code
+  page. Do not hide text problems with blanket errors='replace' application code.
+- Exercise actual launchers under legacy/UTF-8 code pages with Unicode success
+  and failure output; verify encoding restoration in both PowerShell versions.
+  Retain notebook token/authentication, local kernel and cleanup regressions.
+- This contract covers normal UTF-8 streams, not arbitrary legacy native tools,
+  user-replaced streams, data-file encodings or font glyph availability. Child
+  Python processes must receive their own interpreter flags and text decoding.
 
 ## Security baseline v0.1.3 (2026-10-28)
 

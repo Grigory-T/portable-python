@@ -1,6 +1,6 @@
 PORTABLE PYTHON - APPLICATION PROFILE
 =====================================
-Review revision: 2026-10-28. Main template for ordinary Python applications.
+Review revision: 2026-10-29. Main template for ordinary Python applications.
 Extract freshly; do not overlay an older prepared environment.
 
 QUICK START
@@ -109,6 +109,28 @@ From the project root, the launcher executes:
 -u: immediate stdout/stderr; -E: ignore PYTHON* overrides; -s: no user site;
 -B: do not create .pyc; -X utf8: UTF-8 mode; -m: run package as a module.
 -I/-P are not used here: the adjacent application package must be importable.
+
+UTF-8 console contract: the launcher sets PowerShell native-output decoding to
+UTF-8 for Python/uv stdout and stderr, and restores the prior console encoding
+in finally on exit/failure. No Windows regional setting or profile is changed.
+Normal Unicode print() calls need no sys.stdout/sys.stderr.reconfigure block.
+No errors='replace' policy is imposed: invalid application text is not silently
+turned into question marks. Console font glyph coverage remains a host concern.
+
+Python interpreter flags are not inherited by child processes. Use the same
+venv Python and explicit UTF-8 flags for Python workers, for example from the
+project root with a worker at application/worker.py:
+
+  subprocess.run(
+      [sys.executable, '-u', '-E', '-s', '-B', '-X', 'utf8',
+       '-m', 'application.worker'],
+      check=True, capture_output=True, text=True, encoding='utf-8',
+  )
+
+The parent must import sys and subprocess. File encodings are a separate
+contract: specify encoding='utf-8' for UTF-8 text files and choose the actual
+encoding of legacy data. This does not repair already-corrupted text, native
+programs emitting other encodings, or libraries that replace standard streams.
 No activation or PATH lookup is required. The working directory is project root.
 Infrastructure runtime checks use -I instead, avoiding project-root startup
 hooks during validation. Installed .pth/site hooks and dependencies remain trusted.

@@ -18,8 +18,8 @@ can take several minutes; unchanged later starts skip package setup.
 
 | ZIP | Purpose | Put your code here |
 |---|---|---|
-| `portable-python-one-launcher-0.1.3-windows-x86_64.zip` | Ordinary Python application | `application/`; entry point `__main__.py` |
-| `portable-python-jupyterlab-0.1.3-windows-x86_64.zip` | Interactive notebooks | `notebooks/`; create or copy `.ipynb` files |
+| `portable-python-one-launcher-0.1.4-windows-x86_64.zip` | Ordinary Python application | `application/`; entry point `__main__.py` |
+| `portable-python-jupyterlab-0.1.4-windows-x86_64.zip` | Interactive notebooks | `notebooks/`; create or copy `.ipynb` files |
 
 Both are usable immediately. The application example uses only the standard
 library. The notebook example checks its actual interpreter and directory.
@@ -73,7 +73,7 @@ Before first start, edit the supplied `pyproject.toml`, retaining its metadata:
 ```toml
 [project]
 name = "portable-python-one-launcher"
-version = "0.1.3"
+version = "0.1.4"
 description = "General Windows portable Python application"
 requires-python = "==3.13.18"
 dependencies = ["openpyxl", "xlrd", "polars"]
@@ -115,6 +115,18 @@ Both distinguish setup failure (overall code `10`) from app/server failure
 infrastructure progress/status; notebook contents and application output are
 not deliberately copied into those journals.
 
+## UTF-8 output
+
+Both launchers pair Python's `-X utf8` with explicit PowerShell UTF-8 decoding
+of native stdout/stderr and restore the prior console encoding in `finally`.
+Ordinary Unicode `print()` calls need no application `reconfigure()` patch.
+No global Windows setting or lossy `errors="replace"` policy is imposed.
+
+Python workers must repeat `-X utf8`; interpreter flags are not inherited.
+Use `encoding="utf-8"` when capturing their text or reading/writing UTF-8 files.
+Legacy file/program encodings, replaced streams, already-corrupted text and
+terminal font coverage remain separate concerns. See each ZIP's README.
+
 ## Scope and safety
 
 - Run only trusted application/notebook code and reviewed packages, as a normal
@@ -148,7 +160,7 @@ not deliberately copied into those journals.
   security/proxy policy is made. See [security policy](SECURITY.md).
 
 See the [review decisions](docs/SECURITY-REVIEW.md) for fixes, accepted tradeoffs
-and the limits of the security claims. Use a fresh extraction for v0.1.3;
+and the limits of the security claims. Use a fresh extraction for v0.1.4;
 do not overwrite an older prepared environment.
 
 ## Source layout and development

@@ -495,12 +495,17 @@ $PythonVersion = "unknown"
 $PythonRequest = "unknown"
 $PortableError = $null
 $PortableReady = $false
+$OriginalConsoleOutputEncoding = $null
 
+try {
 try {
     [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12
     if ([Environment]::OSVersion.Platform -ne [PlatformID]::Win32NT -or $env:PROCESSOR_ARCHITECTURE -ne 'AMD64') {
         throw 'Use 64-bit Windows PowerShell on Windows x86-64 (AMD64).'
     }
+    # Python/uv emit UTF-8. PowerShell must decode their captured streams as UTF-8.
+    $OriginalConsoleOutputEncoding = [Console]::OutputEncoding
+    [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding($false)
     Confirm-LocalFixedDrive $Root
     foreach ($localPath in @($StateRoot, $VenvRoot, $ApplicationRoot, $PyprojectPath, $LockPath)) {
         if ((Test-Path -LiteralPath $localPath) -and ((Get-Item -LiteralPath $localPath).Attributes -band [System.IO.FileAttributes]::ReparsePoint)) {
@@ -632,6 +637,12 @@ try {
     if ($null -ne $WorkspaceLock) { $WorkspaceLock.Dispose() }
     if (-not $NoPause) {
         [void](Read-Host "Press Enter to close")
+    }
+}
+
+} finally {
+    if ($null -ne $OriginalConsoleOutputEncoding) {
+        [Console]::OutputEncoding = $OriginalConsoleOutputEncoding
     }
 }
 

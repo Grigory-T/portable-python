@@ -29,6 +29,7 @@ function Invoke-Profile([int]$Expected) {
 
 Invoke-Profile 0
 if ($lastOutput -notmatch 'Setup:\s+PERFORMED' -or $lastOutput -notmatch 'APPLICATION RESULT') { throw 'First START did not prepare and run' }
+& (Join-Path $PSScriptRoot 'encoding.ps1') -Launcher (Join-Path $root 'portable-python.ps1') -Root $root -TestRoot $testRoot -Profile Application
 # Infrastructure checks must not import project-root startup hooks.
 $marker = Join-Path $root 'unexpected-startup.txt'
 [IO.File]::WriteAllText((Join-Path $root 'sitecustomize.py'), "from pathlib import Path`nPath(" + "'" + $marker.Replace('\', '/') + "'" + ").write_text('unexpected')", $utf8)

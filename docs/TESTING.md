@@ -31,8 +31,8 @@ After building, from the repository root in PowerShell:
 
 ```powershell
 .\tests\workspace-cleanup.ps1
-.\tests\application.ps1 -Zip .\dist\portable-python-one-launcher-0.1.3-windows-x86_64.zip -Audit
-.\tests\jupyterlab.ps1 -Zip .\dist\portable-python-jupyterlab-0.1.3-windows-x86_64.zip -Audit
+.\tests\application.ps1 -Zip .\dist\portable-python-one-launcher-0.1.4-windows-x86_64.zip -Audit
+.\tests\jupyterlab.ps1 -Zip .\dist\portable-python-jupyterlab-0.1.4-windows-x86_64.zip -Audit
 ```
 
 For an explicit debugging need only, `-KeepWorkspace` retains that run outside
@@ -47,6 +47,16 @@ Application checks: fresh setup/run, empty-library default, Unicode path,
 unchanged start, actual START.bat, nested absolute/relative imports, original
 app exit code, configuration-drift refusal, neutral journal, and a fresh
 custom PyPI version-range requirement.
+
+Shared `tests/encoding.ps1` exercises the actual prepared launchers in Windows
+PowerShell 5.1 and, when installed, PowerShell 7. It captures Information-stream
+strings before another byte conversion can disguise corruption. Under code
+pages 437, 866, 1251 and 65001 it verifies exact Cyrillic/euro/CJK/emoji output,
+Python worker output with explicit UTF-8, and original console-encoding recovery.
+It tests application failure and Unicode setup-policy failure as well as success;
+invalid direct-URL dependencies are rejected before package downloads. Fixtures
+are restored in finally, and all files remain inside the owned test workspace.
+Real notebook-kernel execution also checks Unicode output without reconfigure.
 
 Notebook checks: fresh/reused setup, declared package add/remove, wrong-group
 validation/recovery, local-only kernelspec, loopback listener, concurrent-start

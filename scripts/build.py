@@ -35,7 +35,7 @@ def check_profile(name, files):
         raise ValueError(f"Unexpected or linked source files in {name}: {actual ^ set(files)}")
     metadata = tomllib.loads((source / "pyproject.toml").read_text(encoding="utf-8"))
     project = metadata["project"]
-    assert project["version"] == "0.1.3"
+    assert project["version"] == "0.1.4"
     assert project["requires-python"] == "==3.13.18"
     assert project["dependencies"] == []
     assert metadata["tool"]["uv"]["required-version"] == f"=={UV_VERSION}"
@@ -96,7 +96,7 @@ def build(profile, output):
     with zipfile.ZipFile(destination, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=9) as archive:
         for name, path in entries:
             assert not name.startswith("/") and ".." not in Path(name).parts
-            info = zipfile.ZipInfo(name, date_time=(2026, 10, 28, 0, 0, 0))
+            info = zipfile.ZipInfo(name, date_time=(2026, 10, 29, 0, 0, 0))
             info.create_system = 3  # Fixed ZIP host metadata across build platforms.
             info.compress_type = zipfile.ZIP_DEFLATED
             info.external_attr = 0o100644 << 16

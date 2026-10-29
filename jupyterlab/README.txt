@@ -8,7 +8,7 @@ This is a small Windows 11 x86-64 bootstrap for a project-local JupyterLab
 environment. The ZIP contains no uv executable, CPython, package wheels,
 virtual environment, lock file, cache, or user data. First start downloads and
 prepares everything from official sources. Later starts reuse the local state.
-Review revision: 2026-10-28. Extract this revision into a new folder; do not
+Review revision: 2026-10-29. Extract this revision into a new folder; do not
 overlay launchers on an older prepared environment.
 
 The user-library list is empty by default. JupyterLab and ipykernel are
@@ -281,6 +281,16 @@ belong inside a package module, not directly in an un-packaged notebook cell.
 Save .py and TOML as UTF-8, preferably without BOM. Normal UTF-8 Python needs
 no shebang or encoding cookie. Nested notebooks/packages are supported, within
 Windows path-length limits. This tool does not install your notebook code.
+
+The launcher pairs Python -X utf8 with PowerShell UTF-8 native-output decoding
+for setup and server stdout/stderr, restoring the previous console encoding in
+finally on exit/failure. Normal Unicode print() needs no notebook/application
+reconfigure block; Jupyter carries notebook text through its own Unicode streams.
+No global errors='replace' policy is added. Font glyph support is a host concern.
+File encodings and child processes are separate: use explicit encoding='utf-8'
+for UTF-8 files and captured text, and repeat -X utf8 when starting a child
+Python through sys.executable. Flags are not inherited automatically. Native
+tools emitting a legacy encoding require application-specific handling.
 
 The notebooks/ browser root is navigation scope, NOT a filesystem sandbox.
 Notebook code runs with your Windows permissions; review copied notebooks

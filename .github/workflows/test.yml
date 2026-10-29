@@ -20,7 +20,7 @@ jobs:
         run: ./tests/workspace-cleanup.ps1
       - name: Application acceptance
         shell: powershell
-        run: ./tests/application.ps1 -Zip ./dist/portable-python-one-launcher-0.1.3-windows-x86_64.zip -Audit
+        run: ./tests/application.ps1 -Zip ./dist/portable-python-one-launcher-0.1.4-windows-x86_64.zip -Audit
       - name: JupyterLab acceptance
         shell: powershell
-        run: ./tests/jupyterlab.ps1 -Zip ./dist/portable-python-jupyterlab-0.1.3-windows-x86_64.zip -Audit
+        run: ./tests/jupyterlab.ps1 -Zip ./dist/portable-python-jupyterlab-0.1.4-windows-x86_64.zip -Audit

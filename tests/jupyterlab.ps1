@@ -57,6 +57,7 @@ function Invoke-Profile([int]$Expected = 0) {
     $env:BROWSER = 'invalid-portable-browser-command'
     Invoke-Profile
     if ($lastOutput -notmatch 'Setup:\s+PERFORMED') { throw 'Fresh setup not performed' }
+    & (Join-Path $PSScriptRoot 'encoding.ps1') -Launcher $launcher -Root $root -TestRoot $testRoot -Profile Jupyter
     $configPath = Join-Path $root '.portable-jupyter\jupyter-config\portable-server.json'
     if ([IO.File]::ReadAllText($configPath) -match '"token"\s*:') { throw 'Configured token would hide the browser fallback URL' }
     Invoke-Profile
@@ -192,6 +193,8 @@ ws_url = info["url"].replace("http://", "ws://") + "api/kernels/" + session["ker
 channel = websocket.create_connection(ws_url, timeout=45, origin=info["url"].rstrip("/"), http_no_proxy=["127.0.0.1", "localhost"])
 try:
     code = "import os,pathlib,site,sys,openpyxl,polars as pl; assert pl.DataFrame(dict(x=[1,2])).select(pl.col('x').sum()).item()==3; assert not any(k in os.environ for k in ('SSL_CERT_FILE','SSL_CERT_DIR','BROWSER')); assert sys.version_info[:3]==(3,13,18); assert pathlib.Path(sys.prefix).resolve()==pathlib.Path(" + repr(str(root / ".venv")) + ").resolve(); assert not site.ENABLE_USER_SITE; assert pathlib.Path.cwd().resolve()==pathlib.Path(" + repr(str(root / "notebooks" / "nested")) + ").resolve(); print('LOCAL KERNEL EXECUTION AND POLARS COMPUTE SUCCESS')"
+    unicode_text = '\u0424\u043e\u0440\u043c\u0438\u0440\u043e\u0432\u0430\u043d\u0438\u0435 | \u0401\u0451 | \u20ac | \u65e5\u672c\u8a9e | \U0001f600'
+    code += "; print(" + repr(unicode_text) + ")"
     msg_id = uuid.uuid4().hex
     request = {"header": {"msg_id": msg_id, "username": "test", "session": uuid.uuid4().hex,
         "msg_type": "execute_request", "version": "5.3", "date": datetime.now(timezone.utc).isoformat()},
@@ -211,6 +214,7 @@ try:
         if msg_type == "status" and message["content"]["execution_state"] == "idle":
             break
     assert "LOCAL KERNEL EXECUTION AND POLARS COMPUTE SUCCESS" in output
+    assert unicode_text in output
     print(output.strip())
 finally:
     channel.close()

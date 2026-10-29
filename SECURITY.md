@@ -123,7 +123,7 @@ CI additionally checks its installed package versions against OSV; failure or
 service unavailability is not called clean. This check is not run by START and
 does not certify any later/user-modified graph.
 
-The initial public release used uv **0.13.1**. Current v0.1.3 pins **0.13.6**
+The initial public release used uv **0.13.1**. Current v0.1.4 pins **0.13.6**
 and refuses older versions. Versions 0.12.7 through 0.12.17 had a Windows
 wheel-extraction vulnerability. See
 [GHSA-2cv4-cqwr-gwf7](https://github.com/astral-sh/uv/security/advisories/GHSA-2cv4-cqwr-gwf7).
