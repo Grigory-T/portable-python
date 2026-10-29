@@ -116,6 +116,9 @@ in finally on exit/failure. No Windows regional setting or profile is changed.
 Normal Unicode print() calls need no sys.stdout/sys.stderr.reconfigure block.
 No errors='replace' policy is imposed: invalid application text is not silently
 turned into question marks. Console font glyph coverage remains a host concern.
+Blank native stderr lines remain blank, not PowerShell RemoteException type
+names. Progress/warnings on stderr do not by themselves mean failure; the child
+exit code determines success. Carriage-return progress may appear as lines.
 
 Python interpreter flags are not inherited by child processes. Use the same
 venv Python and explicit UTF-8 flags for Python workers, for example from the

@@ -21,13 +21,16 @@ $originalMain = if ($Profile -eq 'Application') { [IO.File]::ReadAllBytes($main)
 
 function Invoke-Captured([int]$Expected,[int]$Page) {
     [Console]::OutputEncoding = [Text.Encoding]::GetEncoding($Page)
-    $callArgs = @('-NoPause')
-    if ($Profile -eq 'Jupyter') { $callArgs += '-SetupOnly' }
+    $callArgs = @{NoPause=$true}
+    if ($Profile -eq 'Jupyter') { $callArgs.SetupOnly = $true }
     $lines = @(& $Launcher @callArgs *>&1 | ForEach-Object { [string]$_ })
     $code = $LASTEXITCODE
     if ([Console]::OutputEncoding.CodePage -ne $Page) { throw 'Launcher did not restore console encoding' }
     if ([Console]::InputEncoding.CodePage -ne $inputCodePage) { throw 'Launcher changed console input encoding' }
-    if ($code -ne $Expected) { throw "Unexpected launcher exit: expected $Expected, got $code" }
+    if ($code -ne $Expected) {
+        $detail = (($lines | Select-Object -Last 15) -join "`n").Replace($Root, '<project>').Replace($env:USERNAME, '<account>')
+        throw "Unexpected launcher exit: expected $Expected, got $code`n$detail"
+    }
     return ($lines -join "`n")
 }
 
@@ -43,6 +46,11 @@ assert sys.stdout.encoding.lower().replace('-', '') == 'utf8'
 assert sys.stderr.encoding.lower().replace('-', '') == 'utf8'
 print('UTF8_STDOUT|' + text, flush=True)
 print('UTF8_STDERR|' + text, file=sys.stderr, flush=True)
+print(text, flush=True)
+sys.stderr.write(text + '\n\n')
+sys.stderr.write('\rUTF8_PROGRESS|' + text + ': 0%| |0/112 [00:00<?, ?it/s]\r')
+sys.stderr.write('UTF8_PROGRESS|' + text + ': 100%|#|112/112\n')
+sys.stderr.flush()
 code = 'import sys; assert sys.flags.utf8_mode == 1; print(' + repr(text) + ')'
 child = subprocess.run([sys.executable, '-u', '-E', '-s', '-B', '-X', 'utf8', '-c', code], check=True, capture_output=True, text=True, encoding='utf-8')
 assert child.stdout.strip() == text
@@ -51,9 +59,11 @@ print('UTF8_CHILD_SUCCESS')
         [IO.File]::WriteAllText($main, $probe, $utf8)
         foreach ($page in @(437,866,1251,65001)) {
             $output = Invoke-Captured 0 $page
-            foreach ($expected in @(('UTF8_STDOUT|' + $text), ('UTF8_STDERR|' + $text), 'UTF8_CHILD_SUCCESS')) {
+            foreach ($expected in @(('UTF8_STDOUT|' + $text), ('UTF8_STDERR|' + $text), ('UTF8_PROGRESS|' + $text), 'UTF8_CHILD_SUCCESS')) {
                 if (-not $output.Contains($expected)) { throw "Unicode output mismatch at code page $page" }
             }
+            if (@($output.Split("`n") | Where-Object { $_ -ceq $text }).Count -eq 0) { throw 'Cyrillic-only output line was lost' }
+            if ($output.Contains('System.Management.Automation.RemoteException')) { throw 'Empty stderr was exposed as an exception type name' }
         }
         [IO.File]::WriteAllText($main, $probe + "`nraise SystemExit(7)`n", $utf8)
         $output = Invoke-Captured 20 866

@@ -44,7 +44,10 @@ $KernelRoot = Join-Path $JupyterData "kernels"
 $LocalRootApproved = $false
 $WorkspaceLock = $null
 
-function ConvertTo-NeutralText([string]$Text) {
+function ConvertTo-NeutralText([object]$Text) {
+    # PS 5.1 wraps native stderr in ErrorRecord objects. An empty message
+    # stringifies as a RemoteException type name unless we unwrap it first.
+    $Text = if ($Text -is [System.Management.Automation.ErrorRecord]) { [string]$Text.Exception.Message } else { [string]$Text }
     $Text = [regex]::Replace($Text, '[\x00-\x08\x0B-\x1F\x7F-\x9F]', '')
     $Text = [regex]::Replace($Text, '(?i)(https?://)[^\s/@]+@', '$1<redacted>@')
     foreach ($privatePath in @($Root, $env:USERPROFILE, $env:TEMP, $env:TMP)) {
@@ -153,7 +156,7 @@ function Invoke-Checked(
         # Native stderr (including uv progress) is not itself a failure in PS 5.1.
         $ErrorActionPreference = "Continue"
         & $Executable @Arguments 2>&1 | ForEach-Object {
-            $line = ConvertTo-NeutralText ([string]$_)
+            $line = ConvertTo-NeutralText $_
             Write-Host $line
             Write-PortableLog "portable-python" "command_output" "info" $line
         }

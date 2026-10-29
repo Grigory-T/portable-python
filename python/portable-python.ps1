@@ -34,7 +34,10 @@ $LocalRootApproved = $false
 $WorkspaceLock = $null
 $LocalTemp = Join-Path $StateRoot "temp"
 
-function ConvertTo-NeutralText([string]$Text) {
+function ConvertTo-NeutralText([object]$Text) {
+    # PS 5.1 wraps native stderr in ErrorRecord objects. An empty message
+    # stringifies as a RemoteException type name unless we unwrap it first.
+    $Text = if ($Text -is [System.Management.Automation.ErrorRecord]) { [string]$Text.Exception.Message } else { [string]$Text }
     # Upstream messages must not inject terminal controls or expose URL credentials.
     $Text = [regex]::Replace($Text, '[\x00-\x08\x0B-\x1F\x7F-\x9F]', '')
     $Text = [regex]::Replace($Text, '(?i)(https?://)[^\s/@]+@', '$1<redacted>@')
@@ -165,7 +168,7 @@ function Invoke-Checked(
     try {
         $ErrorActionPreference = "Continue"
         & $Executable @Arguments 2>&1 | ForEach-Object {
-            $line = ConvertTo-NeutralText ([string]$_)
+            $line = ConvertTo-NeutralText $_
             Write-Host $line
             Write-PortableLog $Mode "command_output" "info" $line
         }
@@ -578,7 +581,7 @@ try {
         try {
             $ErrorActionPreference = "Continue"
             & $VenvPython -u -E -s -B -X utf8 -m $ApplicationModule 2>&1 | ForEach-Object {
-                Write-Host (ConvertTo-NeutralText ([string]$_))
+                Write-Host (ConvertTo-NeutralText $_)
             }
             $ApplicationExitCode = $LASTEXITCODE
         } finally {

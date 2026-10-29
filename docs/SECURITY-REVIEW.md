@@ -14,6 +14,11 @@ review, not a certification, penetration test or guarantee of harmless dependenc
 - The receiver must decode the producer's bytes correctly. Reconfiguring
   Python stdout again does not fix PowerShell decoding UTF-8 as a legacy code
   page. Do not hide text problems with blanket errors='replace' application code.
+- Unwrap captured PowerShell ErrorRecord objects to their exception message
+  before neutralization. Empty native stderr lines otherwise stringify as a
+  RemoteException type name in Windows PowerShell 5.1. Preserve real text and
+  blank lines, not misleading wrapper names; native exit codes still determine
+  success. Include Unicode-only/progress/blank stderr regression cases.
 - Exercise actual launchers under legacy/UTF-8 code pages with Unicode success
   and failure output; verify encoding restoration in both PowerShell versions.
   Retain notebook token/authentication, local kernel and cleanup regressions.

@@ -287,6 +287,8 @@ for setup and server stdout/stderr, restoring the previous console encoding in
 finally on exit/failure. Normal Unicode print() needs no notebook/application
 reconfigure block; Jupyter carries notebook text through its own Unicode streams.
 No global errors='replace' policy is added. Font glyph support is a host concern.
+Captured native stderr is unwrapped to its real message; blank lines do not
+become RemoteException type names. Stderr output alone is not a failed command.
 File encodings and child processes are separate: use explicit encoding='utf-8'
 for UTF-8 files and captured text, and repeat -X utf8 when starting a child
 Python through sys.executable. Flags are not inherited automatically. Native
