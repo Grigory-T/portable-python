@@ -121,6 +121,9 @@ Both launchers pair Python's `-X utf8` with explicit PowerShell UTF-8 decoding
 of native stdout/stderr and restore the prior console encoding in `finally`.
 Ordinary Unicode `print()` calls need no application `reconfigure()` patch.
 No global Windows setting or lossy `errors="replace"` policy is imposed.
+Blank native stderr lines stay blank instead of becoming PowerShell exception
+type names. Stderr progress/warnings are not failures by themselves; exit codes
+remain authoritative.
 
 Python workers must repeat `-X utf8`; interpreter flags are not inherited.
 Use `encoding="utf-8"` when capturing their text or reading/writing UTF-8 files.

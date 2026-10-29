@@ -53,6 +53,8 @@ PowerShell 5.1 and, when installed, PowerShell 7. It captures Information-stream
 strings before another byte conversion can disguise corruption. Under code
 pages 437, 866, 1251 and 65001 it verifies exact Cyrillic/euro/CJK/emoji output,
 Python worker output with explicit UTF-8, and original console-encoding recovery.
+Unicode-only lines, empty stderr and carriage-return progress are covered; blank
+native messages must not appear as PowerShell RemoteException type names.
 It tests application failure and Unicode setup-policy failure as well as success;
 invalid direct-URL dependencies are rejected before package downloads. Fixtures
 are restored in finally, and all files remain inside the owned test workspace.
