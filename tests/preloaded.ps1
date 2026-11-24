@@ -123,3 +123,6 @@ print("WHEELS AND NESTED IMPORTS SUCCESS")
     }
 }
 Write-Host 'WINDOWS PRELOADED ACCEPTANCE: SUCCESS'
+# The last child intentionally failed the damaged-wheel test. Do not let
+# PowerShell's CI wrapper return that child's expected failure as ours.
+exit 0
