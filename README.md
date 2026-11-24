@@ -22,7 +22,7 @@ can take several minutes; unchanged later starts skip package setup.
 |---|---|---|
 | `portable-python-one-launcher-0.1.4-windows-x86_64.zip` | Ordinary Python application | `application/`; entry point `__main__.py` |
 | `portable-python-jupyterlab-0.1.4-windows-x86_64.zip` | Interactive notebooks | `notebooks/`; create or copy `.ipynb` files |
-| `portable-python-preloaded-0.1.3-windows-x86_64.zip` | Prepare a self-contained application bundle for offline targets | `application/`; entry point `__main__.py` |
+| `portable-python-preloaded-0.1.4-windows-x86_64.zip` | Prepare a self-contained application bundle for offline targets | `application/`; entry point `__main__.py` |
 
 The online editions are usable immediately. The application examples use only the standard
 library. The notebook example checks its actual interpreter and directory.
@@ -32,9 +32,9 @@ The ZIPs contain readable text source, not an opaque installer or executable.
 
 1. **Online Windows machine:** Extract the Preloaded starter ZIP. Edit
    `pyproject.toml` and `application/`, then run **SETUP.bat**.
-2. **Online Windows machine:** ZIP only the contents of the resulting
-   `bundle/`. It contains verified uv, CPython, wheels and a hashed install
-   plan. It contains no `.venv` or setup cache.
+2. **Online Windows machine:** Take the generated `prepared-app.zip` and its
+   SHA-256 from the console or `setup.log`. The flat ZIP contains verified uv,
+   CPython, wheels and a hashed install plan; no `.venv` or setup cache.
 3. **Offline Windows machine:** Verify the ZIP hash, extract into a fresh
    local folder, and run **START.bat**. It creates a local `.venv` from the
    bundled runtime, installs wheels without network, and runs the app.

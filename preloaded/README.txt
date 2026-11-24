@@ -41,34 +41,37 @@ verified local archive while offline. SETUP then locks package versions,
 checks downloaded wheels against uv.lock, and tests an
 offline install without a persistent cache and records the installed
 package names and versions from that throwaway venv. No app is run.
-Only a successful preparation produces bundle/. Temporary files are
-under the starter folder, not Windows Temp, and are removed when it exits.
+SETUP produces bundle/ for inspection and prepared-app.zip for transfer.
+The verified ZIP is published only after it has been completely written and
+checked. Temporary files stay under the starter, not Windows Temp.
 Only one SETUP can run in a starter folder at a time. The empty
 .prepare.lock file is not part of the bundle and may remain between runs.
 Read setup.log in the starter for the latest attempt's steps and errors,
 and bundle/provenance.json for each verified download's URL and SHA-256.
 Unexpected origins, mismatched hashes and failed checks stop SETUP.
+SETUP will not overwrite an existing bundle/ or prepared-app.zip.
 
 To reproduce the prepared payload, use the same starter, application files
 and pyproject.toml in a fresh folder. Copy a trusted bundle/uv.lock next to
 SETUP.bat before starting. SETUP checks and keeps that lock, never silently
-resolving again. This fixes payload inputs and dependency hashes; unavailable
-artifacts still fail, and manual ZIP timestamps/compression may differ.
+resolving again. Identical payload bytes and the same Python build produce
+the same automated ZIP; file order and timestamps are fixed.
 
-ZIP only the CONTENTS of bundle/, not the starter, work files or caches.
-For example, in PowerShell from the starter root (choose a new ZIP name):
-    Add-Type -AssemblyName System.IO.Compression.FileSystem
-    [IO.Compression.ZipFile]::CreateFromDirectory(
-        (Join-Path $PWD.Path 'bundle'), (Join-Path $PWD.Path 'prepared-app.zip'))
-    Get-FileHash .\prepared-app.zip -Algorithm SHA256
-
-Share the archive hash over a trusted channel and verify it before using
-the ZIP. Internal hashes detect corruption, not a maliciously replaced
-manifest or launcher. Review all app files for secrets before shipping.
+Transfer only prepared-app.zip; no manual archiving is needed. SETUP prints
+the ZIP SHA-256 in the console and records it in setup.log. Send the hash
+through a trusted channel separately. The ZIP uses standard DEFLATE with
+UTF-8 filenames where needed and no wrapper folder or encryption. Very large
+archives can require ZIP64. Other operating systems can read the ZIP, but
+the packaged app still targets Windows 11 x64. Review app files for secrets
+before transfer; internal hashes are not an independent signature.
 
 2. OFFLINE TARGET MACHINE
 
-Copy the prepared ZIP locally, verify its SHA-256, then extract it into a
+Copy prepared-app.zip locally and verify its SHA-256 against the trusted
+expected value. In PowerShell:
+    Get-FileHash -LiteralPath .\prepared-app.zip -Algorithm SHA256
+
+If it matches, extract into a
 fresh directory on a local fixed drive. Double-click START.bat. No network
 access is needed or used by the launcher: uv runs with --offline,
 --no-config, --no-python-downloads and --no-index during wheel sync.

@@ -7,6 +7,7 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 $utf8 = New-Object Text.UTF8Encoding($false)
+$unicodeFixture = ('zip-' + [char]0x00e9 + '.txt')
 $pins = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'library-pins.json') -Raw | ConvertFrom-Json
 . (Join-Path $PSScriptRoot 'workspace.ps1')
 $starterZip = if ($Zip) { (Get-Item -LiteralPath $Zip).FullName }
@@ -30,6 +31,7 @@ function Invoke-Target([string]$Root, [int]$Expected) {
 function New-PreparedTestZip([string]$Scenario) {
         $source = Join-Path $testRoot "$scenario online"
         [IO.Compression.ZipFile]::ExtractToDirectory($starterZip, $source)
+        [IO.File]::WriteAllText((Join-Path (Join-Path $source 'application') $unicodeFixture), 'archive member', $utf8)
         if ((Invoke-Target $source 10) -notmatch 'No prepared bundle found') {
             throw 'START on the starter did not give an actionable error.'
         }
@@ -106,6 +108,7 @@ print('STDLIB APPLICATION SUCCESS')
             try {
                 & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $source 'prepare.ps1') | Out-Host
                 if ($LASTEXITCODE -ne 10 -or (Test-Path -LiteralPath (Join-Path $source 'bundle')) -or
+                    (Test-Path -LiteralPath (Join-Path $source 'prepared-app.zip')) -or
                     [IO.File]::ReadAllText((Join-Path $source 'setup.log')) -notmatch 'SHA-256 mismatch for uv-') {
                     throw 'A bad pinned SHA-256 did not fail closed with a setup.log entry.'
                 }
@@ -122,6 +125,8 @@ print('STDLIB APPLICATION SUCCESS')
             throw 'Online preparation left scratch work.'
         }
         $bundle = Join-Path $source 'bundle'
+        $outputZip = Join-Path $source 'prepared-app.zip'
+        $zipHash = (Get-FileHash -LiteralPath $outputZip).Hash
         $provenance = [IO.File]::ReadAllText((Join-Path $bundle 'provenance.json')) | ConvertFrom-Json
         $locked = Join-Path $bundle 'uv.lock'
         if ($provenance.uv_lock_sha256 -ne (Get-FileHash -LiteralPath $locked).Hash -or
@@ -143,14 +148,19 @@ print('STDLIB APPLICATION SUCCESS')
             $firstManifest = (Get-FileHash -LiteralPath $manifestPath).Hash
             [IO.File]::Copy($locked, (Join-Path $source 'uv.lock'))
             [IO.Directory]::Delete($bundle, $true)
+            [IO.File]::Delete($outputZip)
             & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $source 'prepare.ps1') | Out-Host
-            if ($LASTEXITCODE -ne 0 -or (Get-FileHash -LiteralPath $manifestPath).Hash -ne $firstManifest) {
-                throw 'Replaying the saved lock changed the prepared payload.'
+            if ($LASTEXITCODE -ne 0 -or (Get-FileHash -LiteralPath $manifestPath).Hash -ne $firstManifest -or
+                (Get-FileHash -LiteralPath $outputZip).Hash -ne $zipHash) {
+                throw 'Replaying the saved lock changed the payload or transfer ZIP.'
             }
             $replayLog = [IO.File]::ReadAllText((Join-Path $source 'setup.log'))
             if ($replayLog -notmatch 'Using supplied uv.lock' -or $replayLog -match 'BEGIN: dependency_lock') {
                 throw 'Replaying the saved lock silently resolved.'
             }
+        }
+        if ([IO.File]::ReadAllText((Join-Path $source 'setup.log')) -notmatch ('ZIP SHA-256: ' + $zipHash)) {
+            throw 'SETUP did not report the actual transfer ZIP hash.'
         }
         foreach ($forbidden in @('.venv', '.portable-python', '.prepare.lock', 'prepare.ps1', 'prepare.py', 'SETUP.bat', 'setup.log', 'data')) {
             if (Test-Path -LiteralPath (Join-Path $bundle $forbidden)) {
@@ -158,7 +168,7 @@ print('STDLIB APPLICATION SUCCESS')
             }
         }
         $preparedZip = Join-Path $testRoot "$scenario prepared.zip"
-        [IO.Compression.ZipFile]::CreateFromDirectory($bundle, $preparedZip)
+        [IO.File]::Move($outputZip, $preparedZip)
         # Destroy the input before starting the target. Nothing on the target
         # can silently rely on the online directory or its prepared venv.
         [IO.Directory]::Delete($source, $true)
@@ -177,6 +187,10 @@ try {
         }
         $target = Join-Path $testRoot ("$scenario target " + [char]0x00e9 + ' [literal]')
         [IO.Compression.ZipFile]::ExtractToDirectory($preparedZip, $target)
+        if (-not [IO.File]::Exists((Join-Path $target 'START.bat')) -or
+            [IO.File]::ReadAllText((Join-Path (Join-Path $target 'application') $unicodeFixture)) -ne 'archive member') {
+            throw 'Transfer ZIP was not flat or Unicode member names did not survive extraction.'
+        }
         if ($BlockNetwork) {
             foreach ($exe in @('uv.exe', 'runtime\python.exe', '.venv\Scripts\python.exe')) {
                 New-NetFirewallRule -DisplayName "Preloaded test: $exe" -Group $group -Direction Outbound -Action Block -Profile Any -Program (Join-Path $target $exe) | Out-Null

@@ -84,8 +84,9 @@ try {
     [IO.File]::WriteAllText($logPath, '', $Utf8)
     $setupLog = $logPath
     $destination = Join-Path $Root 'bundle'
-    if (Test-Path -LiteralPath $destination) {
-        throw 'bundle already exists. Move it aside or start from a fresh starter ZIP.'
+    $destinationZip = Join-Path $Root 'prepared-app.zip'
+    if ((Test-Path -LiteralPath $destination) -or (Test-Path -LiteralPath $destinationZip)) {
+        throw 'bundle/ or prepared-app.zip already exists. Move the previous outputs aside or use a fresh starter folder.'
     }
     if (@(Get-ChildItem -LiteralPath $Root -Directory -Force -Filter '.prepare-*').Count) {
         throw 'An earlier preparation is active or was interrupted. Review its .prepare-* folder before retrying.'
@@ -222,11 +223,16 @@ try {
     Write-SetupNote 'PASS: trial offline installation'
     Invoke-SetupStep 'manifest' $python ($pythonFlags + @('manifest', $bundle, $inventory))
 
+    $stagedZip = Join-Path $stage 'prepared-app.zip'
+    Invoke-SetupStep 'transfer_zip' $python ($pythonFlags + @('zip', $bundle, $stagedZip))
+    $zipHash = Get-Hash $stagedZip
     Set-Location -LiteralPath $Root
     Remove-PreparationScratch $work
-    Write-SetupNote 'Preparation verified. Publishing bundle/; ZIP only its contents.'
     [IO.Directory]::Move($bundle, $destination)
-    Write-Host 'PREPARATION SUCCESS: ZIP the contents of bundle, not this starter folder.'
+    [IO.File]::Move($stagedZip, $destinationZip)
+    Write-SetupNote 'Transfer artifact: prepared-app.zip'
+    Write-SetupNote "ZIP SHA-256: $zipHash"
+    Write-SetupNote 'PREPARATION SUCCESS: transfer prepared-app.zip, not the starter folder.'
     $code = 0
 } catch {
     $problem = $_.Exception.Message

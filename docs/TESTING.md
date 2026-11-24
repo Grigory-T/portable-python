@@ -102,8 +102,8 @@ Release verification also includes a manual privacy scan, official artifact
 checksum comparison, upstream advisory review, and limited license review.
 Passing tests is not a guarantee that every user package or notebook is safe.
 
-The Preloaded job prepares stdlib-only and wheel-bearing bundles on Windows,
-zips them, removes their source workspaces, and extracts to a new path with
+The Preloaded job prepares stdlib-only and wheel-bearing ZIPs on Windows,
+checks their reported SHA-256, removes their source workspaces, and extracts to a new path with
 spaces, Unicode and brackets. It applies outbound block rules for bundled
 uv and Python on the ephemeral test runner. It checks native and pure-Python
 imports, repeat start, isolation, missing package metadata, offline rebuild,
@@ -112,7 +112,8 @@ absence of a persistent cache, damaged-wheel rejection and app exit status.
 The test removes its rules and owned workspaces.
 It also rejects a wrong download pin without producing a bundle, validates
 the artifact receipts, and prepares the same payload twice using a retained
-lock on the second run. The manifest must match without resolving again.
+lock on the second run. The manifest and generated ZIP must match without
+resolving again. Windows ZIP extraction also verifies a Unicode member name.
 This is Windows Server CI, not a clean, disconnected Windows 11 desktop
 acceptance test. The product never changes firewall rules.
 

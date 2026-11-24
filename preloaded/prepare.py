@@ -4,10 +4,12 @@ import hashlib
 import json
 from pathlib import Path
 import re
+import shutil
 import sys
 import tomllib
 from urllib.parse import unquote, urlsplit
 from urllib.request import build_opener, HTTPRedirectHandler
+from zipfile import ZIP_DEFLATED, ZipFile, ZipInfo
 
 
 def read_toml(path):
@@ -135,6 +137,39 @@ def write_manifest(bundle, inventory):
     )
 
 
+def write_transfer_zip(bundle, destination):
+    """Write a flat, deterministic DEFLATE ZIP and verify its members."""
+    manifest_name = "bundle-manifest.json"
+    manifest_bytes = (bundle / manifest_name).read_bytes()
+    expected = json.loads(manifest_bytes)["sha256"]
+    expected[manifest_name] = hashlib.sha256(manifest_bytes).hexdigest()
+    members = {
+        path.relative_to(bundle).as_posix(): path
+        for path in bundle.rglob("*") if path.is_file()
+    }
+    if members.keys() != expected.keys():
+        raise ValueError("ZIP inputs differ from the bundle manifest")
+
+    with ZipFile(destination, "x") as archive:
+        for name, path in sorted(members.items()):
+            entry = ZipInfo(name, date_time=(2000, 1, 1, 0, 0, 0))
+            entry.create_system = 0  # Standard DOS file attributes.
+            entry.external_attr = 0x20  # Regular file, not read-only.
+            entry.compress_type = ZIP_DEFLATED
+            entry.file_size = path.stat().st_size
+            with path.open("rb") as source, archive.open(entry, "w") as output:
+                shutil.copyfileobj(source, output, length=1024 * 1024)
+
+    # Reading complete entries also validates ZIP CRCs. SHA-256 ties the ZIP
+    # to the prepared payload, not just to its own internal CRCs.
+    with ZipFile(destination) as archive:
+        for name, digest in expected.items():
+            with archive.open(name) as stream:
+                if hashlib.file_digest(stream, "sha256").hexdigest() != digest:
+                    raise ValueError(f"ZIP member does not match the bundle manifest: {name}")
+    print(f"ZIP verified: {len(members)} files")
+
+
 if __name__ == "__main__":
     mode, path, *args = sys.argv[1:]
     if mode == "validate":
@@ -143,5 +178,7 @@ if __name__ == "__main__":
         download_wheels(Path(path), *args)
     elif mode == "manifest":
         write_manifest(Path(path), *args)
+    elif mode == "zip":
+        write_transfer_zip(Path(path), *args)
     else:
         raise SystemExit("Unknown preparation operation")
