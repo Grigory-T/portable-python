@@ -94,6 +94,7 @@ try {
     Write-Host 'PORTABLE PYTHON STATUS: READY'
     Write-Host "Setup: $setup"
     Write-Host 'Interpreter: .venv\Scripts\python.exe'
+    Write-Host 'Sources and hashes: provenance.json'
 
     $code = 20
     $child = Invoke-Native 'application' $python @('-u', '-E', '-s', '-B', '-X', 'utf8', '-m', 'application')

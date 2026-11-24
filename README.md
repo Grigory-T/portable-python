@@ -22,7 +22,7 @@ can take several minutes; unchanged later starts skip package setup.
 |---|---|---|
 | `portable-python-one-launcher-0.1.4-windows-x86_64.zip` | Ordinary Python application | `application/`; entry point `__main__.py` |
 | `portable-python-jupyterlab-0.1.4-windows-x86_64.zip` | Interactive notebooks | `notebooks/`; create or copy `.ipynb` files |
-| `portable-python-preloaded-0.1.2-windows-x86_64.zip` | Prepare a self-contained application bundle for offline targets | `application/`; entry point `__main__.py` |
+| `portable-python-preloaded-0.1.3-windows-x86_64.zip` | Prepare a self-contained application bundle for offline targets | `application/`; entry point `__main__.py` |
 
 The online editions are usable immediately. The application examples use only the standard
 library. The notebook example checks its actual interpreter and directory.

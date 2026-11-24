@@ -53,7 +53,10 @@ function Read-Pins([string]$Path) {
         @('project', 'requires-python', '==(?<value>3\.(?:11|12|13|14)\.\d+)'),
         @('tool.uv', 'required-version', '==(?<value>\d+\.\d+\.\d+)'),
         @('tool.portable-python', 'uv-archive-sha256', '(?<value>[0-9a-fA-F]{64})'),
-        @('tool.portable-python', 'uv-exe-sha256', '(?<value>[0-9a-fA-F]{64})')
+        @('tool.portable-python', 'uv-exe-sha256', '(?<value>[0-9a-fA-F]{64})'),
+        @('tool.portable-python', 'uv-license-mit-sha256', '(?<value>[0-9a-fA-F]{64})'),
+        @('tool.portable-python', 'uv-license-apache-sha256', '(?<value>[0-9a-fA-F]{64})'),
+        @('tool.portable-python', 'python-archive-sha256', '(?<value>[0-9a-fA-F]{64})')
     )) {
         $section, $key, $pattern = $entry
         $tables = [regex]::Matches($text, '(?ms)^[ \t]*\[' + [regex]::Escape($section) + '\][ \t]*(?:#[^\r\n]*)?\r?\n(?<body>.*?)(?=^[ \t]*\[|\z)')

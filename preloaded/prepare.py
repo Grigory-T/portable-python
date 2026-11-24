@@ -28,8 +28,12 @@ def validate_project(path, python, uv):
         "index": [{"name": "pypi", "url": "https://pypi.org/simple", "default": True}],
     }:
         raise ValueError("Only the supplied PyPI-only uv settings are supported")
-    if set(data["tool"]["portable-python"]) != {"uv-archive-sha256", "uv-exe-sha256"}:
-        raise ValueError("Use only the supplied uv integrity fields")
+    pins = data["tool"]["portable-python"]
+    if set(pins) != {
+        "uv-archive-sha256", "uv-exe-sha256", "uv-license-mit-sha256",
+        "uv-license-apache-sha256", "python-archive-sha256",
+    } or not all(isinstance(value, str) and re.fullmatch(r"[a-fA-F0-9]{64}", value) for value in pins.values()):
+        raise ValueError("Use exactly the supplied SHA-256 pins")
     requirements = project["dependencies"]
     if not isinstance(requirements, list) or any(
         not isinstance(req, str)
@@ -94,6 +98,8 @@ def download_wheels(bundle, version):
     wheelhouse = bundle / "wheelhouse"
     wheelhouse.mkdir()
     opener = build_opener(NoRedirect)
+    provenance_path = bundle / "provenance.json"
+    provenance = json.loads(provenance_path.read_text(encoding="utf-8"))
     for name, (url, expected) in sorted(wheels.items()):
         print(f"Download: {url}", flush=True)
         # TLS verification is on; select no insecure fallback or other index.
@@ -103,8 +109,14 @@ def download_wheels(bundle, version):
             while chunk := response.read(1024 * 1024):
                 digest.update(chunk)
                 output.write(chunk)
-        if digest.hexdigest() != expected:
+        actual = digest.hexdigest()
+        if actual != expected:
             raise ValueError(f"Wheel failed locked SHA-256 verification: {name}")
+        print(f"SHA-256 VERIFIED: {name} {actual}", flush=True)
+        provenance["downloads"].append(
+            dict(file=f"wheelhouse/{name}", url=url, sha256=actual, verification="uv.lock SHA-256")
+        )
+    provenance_path.write_text(json.dumps(provenance, indent=2) + "\n", encoding="utf-8")
     print(f"Verified wheel files: {len(wheels)}")
 
 

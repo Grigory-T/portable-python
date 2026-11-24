@@ -15,8 +15,10 @@ paths relative to __file__ or the bundle root, not to the setup machine.
 Edit pyproject.toml before SETUP. Exact CPython and uv pins default to
 3.13.18 and 0.13.6. Choose a normal Windows AMD64 CPython 3.11–3.14 build
 listed in the pinned uv catalog, preferably a supported security patch.
-Changing uv requires replacing both uv SHA-256 pins with independently
-verified hashes of the official ZIP and the extracted uv.exe.
+Changing uv requires reviewed pins for its official ZIP, uv.exe and
+two license files. Changing CPython (or selecting a different build through
+uv) requires the SHA-256 of the exact CPython archive selected by the catalog.
+Never replace a pin just to suppress a mismatch.
 
 Examples for project.dependencies (choose one list):
     dependencies = []
@@ -24,8 +26,8 @@ Examples for project.dependencies (choose one list):
     dependencies = ["openpyxl>=3.1,<4", "polars"]
 Bare names/ranges select versions on this machine. Compatible pure Python,
 Windows AMD64 native and stable-ABI wheels are supported. No source builds,
-custom indexes, direct URLs or git/path dependencies. SETUP resolves anew
-from PyPI; a later preparation can choose newer matching versions.
+custom indexes, direct URLs or git/path dependencies. Without a uv.lock next
+to SETUP.bat, SETUP resolves from PyPI; later resolutions can differ.
 Avoid dependency markers based on platform_version or platform_release.
 If they select different packages on the target, START rejects the inventory
 mismatch. Prepare for a matching Windows environment instead.
@@ -33,15 +35,25 @@ mismatch. Prepare for a matching Windows environment instead.
 Double-click SETUP.bat, or from the extracted starter root:
     .\SETUP.bat
 
-SETUP verifies uv and downloads an exact CPython from its checksum-pinned
-catalog. It locks package versions with uv, downloads matching wheel
-candidates and verifies their locked SHA-256 hashes. It then tests an
+SETUP checks the uv archive, executable, license files and exact CPython
+archive against SHA-256 pins before using them. uv extracts Python from the
+verified local archive while offline. SETUP then locks package versions,
+checks downloaded wheels against uv.lock, and tests an
 offline install without a persistent cache and records the installed
 package names and versions from that throwaway venv. No app is run.
 Only a successful preparation produces bundle/. Temporary files are
 under the starter folder, not Windows Temp, and are removed when it exits.
 Only one SETUP can run in a starter folder at a time. The empty
 .prepare.lock file is not part of the bundle and may remain between runs.
+Read setup.log in the starter for the latest attempt's steps and errors,
+and bundle/provenance.json for each verified download's URL and SHA-256.
+Unexpected origins, mismatched hashes and failed checks stop SETUP.
+
+To reproduce the prepared payload, use the same starter, application files
+and pyproject.toml in a fresh folder. Copy a trusted bundle/uv.lock next to
+SETUP.bat before starting. SETUP checks and keeps that lock, never silently
+resolving again. This fixes payload inputs and dependency hashes; unavailable
+artifacts still fail, and manual ZIP timestamps/compression may differ.
 
 ZIP only the CONTENTS of bundle/, not the starter, work files or caches.
 For example, in PowerShell from the starter root (choose a new ZIP name):
@@ -106,10 +118,13 @@ https://raw.githubusercontent.com/astral-sh/uv/0.13.6/LICENSE-MIT
 https://raw.githubusercontent.com/astral-sh/uv/0.13.6/LICENSE-APACHE
 
 Exact artifact URLs appear during SETUP and in provenance.json / uv.lock.
-TLS verification stays enabled; allow official HTTPS redirect/CDN endpoints
-on the online machine. PowerShell, uv and Python's HTTPS client can handle
-proxies differently. Review dependencies before transfer, including any known
-advisories; SETUP does not query an advisory service.
+Bootstrap redirects must stay on official HTTPS Astral/GitHub release hosts;
+wheel URLs must be on files.pythonhosted.org and may not redirect. TLS
+verification stays enabled. The initial uv.lock resolution trusts PyPI
+metadata over HTTPS; those metadata responses are not separately pinned.
+Release signatures for the default uv and CPython archives are checked when
+reviewing the pins, not by the launcher. Review dependencies before transfer,
+including any known advisories; SETUP does not query an advisory service.
 Wheels can execute code. The venv is not a sandbox; keep target networking
 blocked by host policy if your app or libraries must never access it.
 Python and wheel notices remain with the shipped bytes. Review the licenses

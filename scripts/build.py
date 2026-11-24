@@ -41,7 +41,7 @@ def check_profile(name, files):
         raise ValueError(f"Unexpected or linked source files in {name}: {actual ^ set(files)}")
     metadata = tomllib.loads((source / "pyproject.toml").read_text(encoding="utf-8"))
     project = metadata["project"]
-    assert project["version"] == ("0.1.2" if name == "preloaded" else "0.1.4")
+    assert project["version"] == ("0.1.3" if name == "preloaded" else "0.1.4")
     assert project["requires-python"] == "==3.13.18"
     assert project["dependencies"] == []
     assert metadata["tool"]["uv"]["required-version"] == f"=={UV_VERSION}"
@@ -49,10 +49,17 @@ def check_profile(name, files):
     assert metadata["tool"]["uv"]["index"] == [
         {"name": "pypi", "url": "https://pypi.org/simple", "default": True}
     ]
-    assert metadata["tool"]["portable-python"] == {
+    expected_pins = {
         "uv-archive-sha256": UV_ARCHIVE_SHA256,
         "uv-exe-sha256": UV_EXE_SHA256,
     }
+    if name == "preloaded":
+        expected_pins |= {
+            "uv-license-mit-sha256": "860e3d7a86b84e6a7012c7a635fc64df475cebc6cce34dfeb73a5982ec58176c",
+            "uv-license-apache-sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
+            "python-archive-sha256": "7369f7a35f261222a6ac8b3a87c1c88eeebee8af945d85346202591a64038dd3",
+        }
+    assert metadata["tool"]["portable-python"] == expected_pins
     if name == "jupyterlab":
         assert metadata["dependency-groups"] == {
             "jupyter": ["jupyterlab==4.6.4", "ipykernel==7.4.0"]

@@ -99,6 +99,17 @@ print('STDLIB APPLICATION SUCCESS')
                     throw 'Concurrent SETUP was not rejected before preparation.'
                 }
             } finally { $setupLock.Dispose() }
+            $project = Join-Path $source 'pyproject.toml'
+            $original = [IO.File]::ReadAllText($project)
+            $badPin = $original -replace '(?m)(uv-archive-sha256 = ")[0-9a-f]{64}', ('${1}' + ('0' * 64))
+            [IO.File]::WriteAllText($project, $badPin, $utf8)
+            try {
+                & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $source 'prepare.ps1') | Out-Host
+                if ($LASTEXITCODE -ne 10 -or (Test-Path -LiteralPath (Join-Path $source 'bundle')) -or
+                    [IO.File]::ReadAllText((Join-Path $source 'setup.log')) -notmatch 'SHA-256 mismatch for uv-') {
+                    throw 'A bad pinned SHA-256 did not fail closed with a setup.log entry.'
+                }
+            } finally { [IO.File]::WriteAllText($project, $original, $utf8) }
         }
         # Use the actual setup wrapper in the default scenario.
         if ($scenario -eq 'stdlib') {
@@ -111,7 +122,37 @@ print('STDLIB APPLICATION SUCCESS')
             throw 'Online preparation left scratch work.'
         }
         $bundle = Join-Path $source 'bundle'
-        foreach ($forbidden in @('.venv', '.portable-python', '.prepare.lock', 'prepare.ps1', 'prepare.py', 'SETUP.bat', 'data')) {
+        $provenance = [IO.File]::ReadAllText((Join-Path $bundle 'provenance.json')) | ConvertFrom-Json
+        $locked = Join-Path $bundle 'uv.lock'
+        if ($provenance.uv_lock_sha256 -ne (Get-FileHash -LiteralPath $locked).Hash -or
+            @($provenance.downloads | Where-Object { $_.url -notmatch '^https://' -or $_.sha256 -notmatch '^[a-f0-9]{64}$' }).Count) {
+            throw 'Bundle provenance is incomplete or inconsistent.'
+        }
+        $wheels = @(Get-ChildItem -LiteralPath (Join-Path $bundle 'wheelhouse') -Filter '*.whl')
+        if (@($provenance.downloads).Count -ne (4 + $wheels.Count)) {
+            throw 'A downloaded artifact is missing from provenance.'
+        }
+        foreach ($wheel in $wheels) {
+            $entry = @($provenance.downloads | Where-Object file -ceq ("wheelhouse/" + $wheel.Name))
+            if ($entry.Count -ne 1 -or $entry[0].sha256 -ne (Get-FileHash -LiteralPath $wheel.FullName).Hash) {
+                throw 'Wheel receipt does not match shipped bytes.'
+            }
+        }
+        if ($scenario -eq 'wheels' -and -not $ExportBundle) {
+            $manifestPath = Join-Path $bundle 'bundle-manifest.json'
+            $firstManifest = (Get-FileHash -LiteralPath $manifestPath).Hash
+            [IO.File]::Copy($locked, (Join-Path $source 'uv.lock'))
+            [IO.Directory]::Delete($bundle, $true)
+            & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $source 'prepare.ps1') | Out-Host
+            if ($LASTEXITCODE -ne 0 -or (Get-FileHash -LiteralPath $manifestPath).Hash -ne $firstManifest) {
+                throw 'Replaying the saved lock changed the prepared payload.'
+            }
+            $replayLog = [IO.File]::ReadAllText((Join-Path $source 'setup.log'))
+            if ($replayLog -notmatch 'Using supplied uv.lock' -or $replayLog -match 'BEGIN: dependency_lock') {
+                throw 'Replaying the saved lock silently resolved.'
+            }
+        }
+        foreach ($forbidden in @('.venv', '.portable-python', '.prepare.lock', 'prepare.ps1', 'prepare.py', 'SETUP.bat', 'setup.log', 'data')) {
             if (Test-Path -LiteralPath (Join-Path $bundle $forbidden)) {
                 throw "Prepared bundle includes unshippable content: $forbidden"
             }

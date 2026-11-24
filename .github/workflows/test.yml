@@ -37,4 +37,4 @@ jobs:
         run: python -B tests/wheel-tags.py
       - name: Prepare, repackage, and launch offline from a different path
         shell: powershell
-        run: ./tests/preloaded.ps1 -Zip ./dist/portable-python-preloaded-0.1.2-windows-x86_64.zip -BlockNetwork
+        run: ./tests/preloaded.ps1 -Zip ./dist/portable-python-preloaded-0.1.3-windows-x86_64.zip -BlockNetwork
