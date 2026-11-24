@@ -11,7 +11,9 @@ $setupLog = $null
 $code = 10
 
 function Write-SetupNote([string]$Message) {
-    $text = ($Message.Replace($Root, '<starter>') -replace '(https://[^?\s]+)\?[^\s]+', '$1?<redacted>') -replace '[\x00-\x1F\x7F]', ' '
+    $text = $Message.Replace($Root, '<starter>').Replace($env:USERPROFILE, '<profile>')
+    $text = $text -replace '(?i)(https?://)[^\s/@]+@', '$1<redacted>@'
+    $text = ($text -replace '(?i)(https?://[^?\s]+)\?[^\s]+', '$1?<redacted>') -replace '[\x00-\x1F\x7F]', ' '
     Write-Host $text
     if ($null -ne $setupLog) {
         [IO.File]::AppendAllText($setupLog, ([DateTime]::UtcNow.ToString('o') + ' ' + $text + [Environment]::NewLine), $Utf8)
@@ -20,7 +22,7 @@ function Write-SetupNote([string]$Message) {
 
 function Invoke-SetupStep([string]$Step, [string]$Exe, [string[]]$Arguments) {
     Write-SetupNote "BEGIN: $Step"
-    Invoke-Checked $Step $Exe $Arguments
+    Invoke-Checked $Step $Exe $Arguments 6>&1 | ForEach-Object { Write-SetupNote ([string]$_) }
     Write-SetupNote "PASS: $Step"
 }
 
@@ -214,7 +216,7 @@ try {
     Write-SetupNote 'BEGIN: trial offline installation'
     Set-LocalEnvironment (Join-Path $work 'offline')
     $probeVenv = Join-Path $work 'probe-venv'
-    Initialize-OfflineVenv $bundle $probeVenv
+    Initialize-OfflineVenv $bundle $probeVenv 6>&1 | ForEach-Object { Write-SetupNote ([string]$_) }
     $inventory = Join-Path $work 'installed-packages.txt'
     [IO.File]::WriteAllLines($inventory, [string[]]@(Read-EnvironmentPackages $probeVenv $pythonVersion $python), $Utf8)
     Write-SetupNote 'PASS: trial offline installation'

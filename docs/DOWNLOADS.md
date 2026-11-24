@@ -111,13 +111,35 @@ make their own requests. The launcher is not a network sandbox.
 
 ### Preloaded preparation
 
-SETUP downloads the pinned uv archive with PowerShell, then retrieves license
-terms from `https://raw.githubusercontent.com/astral-sh/uv/<version>/LICENSE-MIT`
-and `…/LICENSE-APACHE` (same path). uv downloads CPython from its pinned catalog.
-uv locks against PyPI and the bundled CPython's standard-library HTTPS client
+SETUP downloads the uv archive, the two official license files and the
+exact CPython archive selected by uv's catalog. The PowerShell client uses
+TLS verification and checks every redirect against the HTTPS allowlist:
+`releases.astral.sh`, `github.com`, `release-assets.githubusercontent.com`
+and `raw.githubusercontent.com`. All four downloads must match the SHA-256
+pins in `pyproject.toml`. The hashes are not downloaded from the same response
+as the files. uv extracts the checked CPython archive from a temporary local
+`file:` mirror, offline, without fallback to a network source.
+
+uv resolves through PyPI (or uses a trusted `uv.lock` provided beside
+`SETUP.bat`). The bundled CPython's standard-library HTTPS client
 downloads matching wheels from the locked `files.pythonhosted.org/packages/`
-URLs without redirects, checking each locked SHA-256. The exact URLs are
-printed and retained in `provenance.json` / `uv.lock`.
+URLs without redirects and checks each locked SHA-256. `setup.log` stays in
+the starter directory and shows the steps and failures. `provenance.json` is
+shipped in the prepared payload with the exact artifact URLs and verified
+hashes. PyPI resolution metadata is HTTPS-protected, not independently pinned.
+
+The default archives were verified against signed upstream GitHub release
+attestations during pin review. Maintainers may repeat the checks on downloaded
+archives; no GitHub CLI or signing key is required on the setup/target machine:
+
+```text
+gh release verify-asset 0.13.6 uv-x86_64-pc-windows-msvc.zip -R astral-sh/uv
+gh release verify-asset 20261026 cpython-3.13.18+20261026-x86_64-pc-windows-msvc-install_only_stripped.tar.gz -R astral-sh/python-build-standalone
+```
+
+These are archive attestations, not a claim that each executable or wheel is
+code-signed. For a prepared ZIP, authenticate its SHA-256 through a trusted
+channel before extraction. The manifest is not an independent signature.
 
 START contains no downloader. It uses the bundle runtime and a local flat
 wheelhouse with uv `--offline --no-config --no-python-downloads`, and sync adds

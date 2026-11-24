@@ -110,6 +110,9 @@ imports, repeat start, isolation, missing package metadata, offline rebuild,
 automatic `data/` creation, user-data preservation, concurrent SETUP rejection,
 absence of a persistent cache, damaged-wheel rejection and app exit status.
 The test removes its rules and owned workspaces.
+It also rejects a wrong download pin without producing a bundle, validates
+the artifact receipts, and prepares the same payload twice using a retained
+lock on the second run. The manifest must match without resolving again.
 This is Windows Server CI, not a clean, disconnected Windows 11 desktop
 acceptance test. The product never changes firewall rules.
 

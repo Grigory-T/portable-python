@@ -120,8 +120,12 @@ The online profiles resolve on the target. Preloaded resolves on a dedicated
 online machine and transfers verified runtime files, wheel hashes and the
 locked graph. The manifest checks transfer integrity on first start, not
 authenticity against a replaced launcher/manifest. Verify the prepared archive
-hash from a trusted channel and keep the extracted folder private. Offline uv
-settings do not restrict network access by application code; use host or
+hash from a trusted channel. A trusted saved lock is checked as-is during
+Preloaded preparation; a stale lock fails, rather than silently re-resolving.
+On first resolution, TLS and the existing Windows trust store still protect
+registry metadata; malicious upstream metadata is outside the hash guarantee.
+Keep the extracted folder private. Offline uv settings do not restrict
+network access by application code; use host or
 network policy for that boundary.
 The generated lock freezes that installation, not all future fresh installations.
 CI additionally checks its installed package versions against OSV; failure or
