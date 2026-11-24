@@ -125,9 +125,10 @@ function Read-EnvironmentPackages([string]$Venv, [string]$Version, [string]$Base
         Assert-NotLinked (Get-Item -LiteralPath $path -Force)
     }
     $cfg = [IO.File]::ReadAllText($config, $Utf8)
-    $home = [regex]::Matches($cfg, '(?im)^home[ \t]*=[ \t]*(.+?)\r?$')
+    $runtimePathSetting = [regex]::Matches($cfg, '(?im)^home[ \t]*=[ \t]*(.+?)\r?$')
     $site = [regex]::Matches($cfg, '(?im)^include-system-site-packages[ \t]*=[ \t]*(.+?)\r?$')
-    if ($home.Count -ne 1 -or $home[0].Groups[1].Value.Trim() -ne [IO.Path]::GetDirectoryName($Base) -or
+    if ($runtimePathSetting.Count -ne 1 -or
+        $runtimePathSetting[0].Groups[1].Value.Trim() -ne [IO.Path]::GetDirectoryName($Base) -or
         $site.Count -ne 1 -or $site[0].Groups[1].Value.Trim() -ne 'false') {
         throw 'pyvenv.cfg no longer points to the isolated bundled runtime.'
     }
