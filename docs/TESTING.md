@@ -118,3 +118,12 @@ production defaults. Preloaded exercises Polars (Windows stable ABI), Calamine
 (CPython 3.13 wheel), and an in-memory Excel write/read round-trip. JupyterLab
 checks the notebook pins and psutil in the live kernel. The existing
 stdlib-only and default notebook setups are still tested first.
+
+To test across two separate Windows machines, run `tests/preloaded.ps1
+-Zip <starter.zip> -ExportBundle <fixture.zip>` on the online setup machine.
+Transfer the synthetic fixture (verify its SHA-256), then run
+`tests/preloaded.ps1 -TargetBundle <fixture.zip>` on the target. Both runs
+clean their owned workspaces; remove the transferred test ZIP after testing.
+Use `-BlockNetwork` only on a disposable test runner where applying temporary
+per-binary firewall rules is appropriate. Never run the online prep phase on
+an isolated target.

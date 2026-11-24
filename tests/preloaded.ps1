@@ -1,9 +1,16 @@
-param([Parameter(Mandatory=$true)][string]$Zip, [switch]$BlockNetwork)
+[CmdletBinding(DefaultParameterSetName='Starter')]
+param(
+    [Parameter(Mandatory=$true, ParameterSetName='Starter')][string]$Zip,
+    [Parameter(ParameterSetName='Starter')][string]$ExportBundle,
+    [Parameter(Mandatory=$true, ParameterSetName='Target')][string]$TargetBundle,
+    [switch]$BlockNetwork
+)
 $ErrorActionPreference = 'Stop'
 $utf8 = New-Object Text.UTF8Encoding($false)
 $pins = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'library-pins.json') -Raw | ConvertFrom-Json
 . (Join-Path $PSScriptRoot 'workspace.ps1')
-$starterZip = (Get-Item -LiteralPath $Zip).FullName
+$starterZip = if ($Zip) { (Get-Item -LiteralPath $Zip).FullName }
+$inputBundle = if ($TargetBundle) { (Get-Item -LiteralPath $TargetBundle).FullName }
 $testRoot = New-TestWorkspace 'preloaded'
 $group = 'Portable Python acceptance ' + [guid]::NewGuid().ToString('N')
 
@@ -20,9 +27,7 @@ function Invoke-Target([string]$Root, [int]$Expected) {
     return $text
 }
 
-try {
-    Add-Type -AssemblyName System.IO.Compression.FileSystem
-    foreach ($scenario in @('stdlib', 'wheels')) {
+function New-PreparedTestZip([string]$Scenario) {
         $source = Join-Path $testRoot "$scenario online"
         [IO.Compression.ZipFile]::ExtractToDirectory($starterZip, $source)
         if ((Invoke-Target $source 10) -notmatch 'No prepared bundle found') {
@@ -97,9 +102,9 @@ print('STDLIB APPLICATION SUCCESS')
         }
         # Use the actual setup wrapper in the default scenario.
         if ($scenario -eq 'stdlib') {
-            & cmd.exe /d /c ('echo x|call "' + (Join-Path $source 'SETUP.bat') + '"')
+            & cmd.exe /d /c ('echo x|call "' + (Join-Path $source 'SETUP.bat') + '"') | Out-Host
         } else {
-            & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $source 'prepare.ps1')
+            & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $source 'prepare.ps1') | Out-Host
         }
         if ($LASTEXITCODE -ne 0) { throw 'Online preparation failed.' }
         if (@(Get-ChildItem -LiteralPath $source -Directory -Force -Filter '.prepare-*').Count) {
@@ -116,6 +121,19 @@ print('STDLIB APPLICATION SUCCESS')
         # Destroy the input before starting the target. Nothing on the target
         # can silently rely on the online directory or its prepared venv.
         [IO.Directory]::Delete($source, $true)
+        return $preparedZip
+}
+
+try {
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    $scenarios = if ($inputBundle -or $ExportBundle) { @('wheels') } else { @('stdlib', 'wheels') }
+    foreach ($scenario in $scenarios) {
+        $preparedZip = if ($inputBundle) { $inputBundle } else { New-PreparedTestZip $scenario }
+        if ($ExportBundle) {
+            [IO.File]::Copy($preparedZip, $ExportBundle)
+            Write-Host 'Prepared compatibility fixture ZIP exported.'
+            continue
+        }
         $target = Join-Path $testRoot ("$scenario target " + [char]0x00e9 + ' [literal]')
         [IO.Compression.ZipFile]::ExtractToDirectory($preparedZip, $target)
         if ($BlockNetwork) {
@@ -188,7 +206,11 @@ print('STDLIB APPLICATION SUCCESS')
         if (Test-Path -LiteralPath $testRoot) { throw 'Test workspace remains.' }
     }
 }
-Write-Host 'WINDOWS PRELOADED ACCEPTANCE: SUCCESS'
+if ($ExportBundle) {
+    Write-Host 'WINDOWS PRELOADED TEST PREPARATION: SUCCESS'
+} else {
+    Write-Host 'WINDOWS PRELOADED ACCEPTANCE: SUCCESS'
+}
 # The last child intentionally failed the damaged-wheel test. Do not let
 # PowerShell's CI wrapper return that child's expected failure as ours.
 exit 0
