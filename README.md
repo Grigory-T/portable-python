@@ -130,8 +130,9 @@ TOML, stop its server, then START again. If the browser does not open, copy the
 
 All distinguish setup failure (overall code `10`) from app/server failure
 (`20`), with `0` success and `30` launcher failure. Local JSONL journals record
-infrastructure diagnostics in the online profiles; Preloaded displays its
-diagnostics in the console. Application output is not journaled.
+infrastructure diagnostics in the online profiles. Preloaded records
+preparation and the ZIP hash in `setup.log` on the setup machine; its target
+diagnostics stay in the console. Application output is not journaled.
 
 ## UTF-8 output
 
