@@ -24,7 +24,8 @@ Examples for project.dependencies (choose one list):
     dependencies = ["openpyxl>=3.1,<4", "polars"]
 Bare names/ranges select versions on this machine. Compatible pure Python,
 Windows AMD64 native and stable-ABI wheels are supported. No source builds,
-custom indexes, direct URLs, git/path dependencies or offline re-resolving.
+custom indexes, direct URLs or git/path dependencies. SETUP resolves anew
+from PyPI; a later preparation can choose newer matching versions.
 
 Double-click SETUP.bat, or from the extracted starter root:
     .\SETUP.bat
@@ -32,7 +33,8 @@ Double-click SETUP.bat, or from the extracted starter root:
 SETUP verifies uv and downloads an exact CPython from its checksum-pinned
 catalog. It locks package versions with uv, downloads matching wheel
 candidates and verifies their locked SHA-256 hashes. It then tests an
-offline install with an empty cache and a throwaway venv. No app is run.
+offline install without a persistent cache and records the installed
+package names and versions from that throwaway venv. No app is run.
 Only a successful preparation produces bundle/. Temporary files are
 under the starter folder, not Windows Temp, and are removed when it exits.
 
@@ -53,14 +55,25 @@ Copy the prepared ZIP locally, verify its SHA-256, then extract it into a
 fresh directory on a local fixed drive. Double-click START.bat. No network
 access is needed or used by the launcher: uv runs with --offline,
 --no-config, --no-python-downloads and --no-index during wheel sync.
-It verifies payload files on first start, creates .venv from runtime/ at
-the extraction path, and installs exactly from the bundled hashed plan.
-It then runs the app. Later starts check the interpreter and skip setup.
+It verifies payload files on first start or rebuild, creates .venv from
+runtime/ at the extraction path, and uses uv to select local wheels for
+the locked versions and hashes. No persistent uv cache is kept. Later
+starts check the interpreter, isolation settings and installed package
+names/versions, then skip installation. This is not a file-by-file audit:
+missing or damaged package contents can still fail at import time.
 
 Do not transfer a .venv or move the initialized folder. Move the ZIP or
 unstarted bundle instead. If the configuration or app payload needs to
-change, make a fresh bundle online. After failed setup, re-extract the
-prepared ZIP into a new local folder and diagnose the reported error.
+change, make a fresh bundle online. Keep the shipped files unchanged and
+put writable inputs/results in data/ or outside the bundle. START does not
+rehash application or runtime files on every run. Use sys.executable for
+Python subprocesses; plain "python" can select a different interpreter.
+
+To recover a damaged or interrupted .venv, stop the app and move only the
+.venv directory outside the bundle. Run START.bat again. It verifies the
+payload and recreates the environment offline, leaving data/ alone. No
+need to re-extract unless the payload itself is missing or damaged.
+
 An arbitrary folder name is fine within normal Windows path limits;
 no network shares, junctions, or symlinks. START exit: 0 success,
 10 environment failure, 20 application failure, 30 wrapper failure.
@@ -72,7 +85,7 @@ application/: your code and static data.
 uv.exe, runtime/, wheelhouse/: the third-party binaries and wheels.
 pyproject.toml, uv.lock: chosen settings and resolved dependency record.
 install-plan.txt: uv-exported hashed installation input, not a second lock.
-bundle-manifest.json: relative paths and checksums of shipped files.
+bundle-manifest.json: relative paths, shipped file hashes and package inventory.
 provenance.json, LICENSE, THIRD_PARTY.md, licenses/: origins and notices.
 .venv/ and .portable-python/ are created only by START; never zip them.
 
@@ -86,7 +99,9 @@ https://raw.githubusercontent.com/astral-sh/uv/0.13.6/LICENSE-APACHE
 
 Exact artifact URLs appear during SETUP and in provenance.json / uv.lock.
 TLS verification stays enabled; allow official HTTPS redirect/CDN endpoints
-on the online machine. No fixed IPs. Online resolution is a trust decision.
+on the online machine. PowerShell, uv and Python's HTTPS client can handle
+proxies differently. Review dependencies before transfer, including any known
+advisories; SETUP does not query an advisory service.
 Wheels can execute code. The venv is not a sandbox; keep target networking
 blocked by host policy if your app or libraries must never access it.
 Python and wheel notices remain with the shipped bytes. Review the licenses

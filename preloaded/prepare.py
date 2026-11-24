@@ -108,14 +108,18 @@ def download_wheels(bundle, version):
     print(f"Verified wheel files: {len(wheels)}")
 
 
-def write_manifest(bundle):
+def write_manifest(bundle, inventory):
     files = {}
     for path in sorted(bundle.rglob("*")):
         if path.is_file():
             with path.open("rb") as stream:
                 files[path.relative_to(bundle).as_posix()] = hashlib.file_digest(stream, "sha256").hexdigest()
     (bundle / "bundle-manifest.json").write_text(
-        json.dumps({"schema": 1, "sha256": files}, indent=2, ensure_ascii=True) + "\n", encoding="utf-8"
+        json.dumps({
+            "schema": 2,
+            "installed_packages": Path(inventory).read_text(encoding="utf-8").splitlines(),
+            "sha256": files,
+        }, indent=2, ensure_ascii=True) + "\n", encoding="utf-8"
     )
 
 
@@ -126,6 +130,6 @@ if __name__ == "__main__":
     elif mode == "wheels":
         download_wheels(Path(path), *args)
     elif mode == "manifest":
-        write_manifest(Path(path))
+        write_manifest(Path(path), *args)
     else:
         raise SystemExit("Unknown preparation operation")

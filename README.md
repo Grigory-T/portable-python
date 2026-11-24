@@ -22,7 +22,7 @@ can take several minutes; unchanged later starts skip package setup.
 |---|---|---|
 | `portable-python-one-launcher-0.1.4-windows-x86_64.zip` | Ordinary Python application | `application/`; entry point `__main__.py` |
 | `portable-python-jupyterlab-0.1.4-windows-x86_64.zip` | Interactive notebooks | `notebooks/`; create or copy `.ipynb` files |
-| `portable-python-preloaded-0.1.0-windows-x86_64.zip` | Prepare a self-contained application bundle for offline targets | `application/`; entry point `__main__.py` |
+| `portable-python-preloaded-0.1.1-windows-x86_64.zip` | Prepare a self-contained application bundle for offline targets | `application/`; entry point `__main__.py` |
 
 The online editions are usable immediately. The application examples use only the standard
 library. The notebook example checks its actual interpreter and directory.
@@ -38,7 +38,9 @@ The ZIPs contain readable text source, not an opaque installer or executable.
 3. **Offline Windows machine:** Verify the ZIP hash, extract into a fresh
    local folder, and run **START.bat**. It creates a local `.venv` from the
    bundled runtime, installs wheels without network, and runs the app.
-   Later starts skip installation. Keep the target network blocked by policy
+   Later starts check the installed package inventory and skip installation.
+   If the environment is damaged, move only `.venv` outside the bundle and
+   run START to rebuild it offline. Keep the target network blocked by policy
    if the application itself must not contact the network.
 
 The third release ZIP is the **starter**, not the large prepared bundle. See

@@ -68,9 +68,9 @@ function Set-LocalEnvironment([string]$Work) {
     $env:UV_CACHE_DIR = Join-Path $Work 'cache'
     $env:TEMP = Join-Path $Work 'temp'
     $env:TMP = $env:TEMP
-    foreach ($directory in @($env:TEMP, $env:UV_CACHE_DIR)) {
-        $item = [IO.Directory]::CreateDirectory($directory)
-        Assert-NotLinked $item
+    Assert-NotLinked ([IO.Directory]::CreateDirectory($env:TEMP))
+    if (Test-Path -LiteralPath $env:UV_CACHE_DIR) {
+        Assert-NotLinked (Get-Item -LiteralPath $env:UV_CACHE_DIR -Force)
     }
 }
 
@@ -103,9 +103,9 @@ function Initialize-OfflineVenv([string]$Bundle, [string]$Venv) {
     $runtime = Join-Path $Bundle 'runtime\python.exe'
     $requirements = Join-Path $Bundle 'install-plan.txt'
     $wheels = Join-Path $Bundle 'wheelhouse'
-    # No target resolver, indexes, Python downloads, source builds, or external
-    # caches. All binaries come from the verified bundle. Copy, never link.
-    $flags = @('--offline', '--no-config', '--no-python-downloads')
+    # uv selects local wheels for the locked versions; it cannot use a
+    # network index, download Python, build sources or keep a persistent cache.
+    $flags = @('--offline', '--no-config', '--no-python-downloads', '--no-cache')
     Invoke-Checked 'venv_create' $uv ($flags + @('venv', '--python', $runtime, $Venv))
     $python = Join-Path $Venv 'Scripts\python.exe'
     $links = if ([IO.Directory]::Exists($wheels)) { @('--find-links', $wheels) } else { @() }
@@ -117,10 +117,36 @@ function Initialize-OfflineVenv([string]$Bundle, [string]$Venv) {
     Invoke-Checked 'dependency_check' $uv ($flags + @('pip', 'check', '--python', $python))
 }
 
-function Confirm-Interpreter([string]$Python, [string]$Version, [string]$Base, [string]$Venv) {
-    Invoke-Checked 'runtime_check' $Python @(
-        '-I', '-S', '-B', '-X', 'utf8', '-c',
-        "import pathlib,sys; p=pathlib.Path; assert sys.implementation.name=='cpython'; assert '.'.join(map(str,sys.version_info[:3]))==sys.argv[1]; assert p(sys._base_executable).resolve()==p(sys.argv[2]).resolve(); assert p(sys.executable).parent.parent.resolve()==p(sys.argv[3]).resolve(); print('Verified project-local CPython ' + sys.argv[1])",
-        $Version, $Base, $Venv
-    )
+function Read-EnvironmentPackages([string]$Venv, [string]$Version, [string]$Base) {
+    $scripts = Join-Path $Venv 'Scripts'
+    $python = Join-Path $scripts 'python.exe'
+    $config = Join-Path $Venv 'pyvenv.cfg'
+    foreach ($path in @($Venv, $scripts, $python, $config)) {
+        Assert-NotLinked (Get-Item -LiteralPath $path -Force)
+    }
+    $cfg = [IO.File]::ReadAllText($config, $Utf8)
+    $home = [regex]::Matches($cfg, '(?im)^home[ \t]*=[ \t]*(.+?)\r?$')
+    $site = [regex]::Matches($cfg, '(?im)^include-system-site-packages[ \t]*=[ \t]*(.+?)\r?$')
+    if ($home.Count -ne 1 -or $home[0].Groups[1].Value.Trim() -ne [IO.Path]::GetDirectoryName($Base) -or
+        $site.Count -ne 1 -or $site[0].Groups[1].Value.Trim() -ne 'false') {
+        throw 'pyvenv.cfg no longer points to the isolated bundled runtime.'
+    }
+    # Inspect local metadata without imports or executing site/.pth hooks.
+    $probe = @'
+from importlib.metadata import distributions
+from pathlib import Path
+import sys
+
+venv = Path(sys.argv[3]).resolve()
+assert sys.implementation.name == 'cpython'
+assert '.'.join(map(str, sys.version_info[:3])) == sys.argv[1]
+assert Path(sys._base_executable).resolve() == Path(sys.argv[2]).resolve()
+assert Path(sys.executable).parent.parent.resolve() == venv
+for dist in sorted('{}=={}'.format(p.metadata['Name'], p.version) for p in distributions(path=[venv / 'Lib' / 'site-packages'])):
+    print(dist)
+'@
+    # Single-quote-only Python source works with PS 5.1 native argument quoting.
+    $packages = & $python -I -S -B -X utf8 -c $probe $Version $Base $Venv
+    if ($LASTEXITCODE -ne 0) { throw 'Project-local Python check failed.' }
+    return $packages
 }

@@ -41,7 +41,7 @@ def check_profile(name, files):
         raise ValueError(f"Unexpected or linked source files in {name}: {actual ^ set(files)}")
     metadata = tomllib.loads((source / "pyproject.toml").read_text(encoding="utf-8"))
     project = metadata["project"]
-    assert project["version"] == ("0.1.0" if name == "preloaded" else "0.1.4")
+    assert project["version"] == ("0.1.1" if name == "preloaded" else "0.1.4")
     assert project["requires-python"] == "==3.13.18"
     assert project["dependencies"] == []
     assert metadata["tool"]["uv"]["required-version"] == f"=={UV_VERSION}"

@@ -135,13 +135,14 @@ try {
         '--no-emit-project', '--no-header', '--format', 'requirements.txt',
         '--output-file', (Join-Path $bundle 'install-plan.txt'), '--quiet'
     ))
-    # Fresh cache and venv. Fail preparation if the exact target command fails
+    # Fresh venv and no retained cache. Fail if the exact target command fails
     # without network, even if every downloaded file passed its own checksum.
     Write-Host 'Validating the prepared wheelhouse in a throwaway offline venv...'
     Set-LocalEnvironment (Join-Path $work 'offline')
     $probeVenv = Join-Path $work 'probe-venv'
     Initialize-OfflineVenv $bundle $probeVenv
-    Confirm-Interpreter (Join-Path $probeVenv 'Scripts\python.exe') $pythonVersion $python $probeVenv
+    $inventory = Join-Path $work 'installed-packages.txt'
+    [IO.File]::WriteAllLines($inventory, [string[]]@(Read-EnvironmentPackages $probeVenv $pythonVersion $python), $Utf8)
     $provenance = [ordered]@{
         python = $pythonVersion
         python_archive = $pythonUrl
@@ -152,7 +153,7 @@ try {
         index = $index
     }
     [IO.File]::WriteAllText((Join-Path $bundle 'provenance.json'), ($provenance | ConvertTo-Json), $Utf8)
-    Invoke-Checked 'manifest' $python ($pythonFlags + @('manifest', $bundle))
+    Invoke-Checked 'manifest' $python ($pythonFlags + @('manifest', $bundle, $inventory))
 
     Set-Location -LiteralPath $Root
     Remove-PreparationScratch $work

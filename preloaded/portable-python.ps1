@@ -15,14 +15,13 @@ $ready = Join-Path $state 'ready.state'
 $lock = $null
 $code = 10
 
-function Verify-Bundle {
-    $record = [IO.File]::ReadAllText($manifest, $Utf8) | ConvertFrom-Json
-    if ($record.schema -ne 1) { throw 'Unsupported bundle manifest.' }
+function Verify-Bundle($record) {
     $files = $record.sha256.PSObject.Properties
     $verified = 0
     $payload = foreach ($item in (Get-ChildItem -LiteralPath $Root -Force)) {
         if ($item.FullName -eq $state) { continue }
         Assert-NotLinked $item
+        if ($item.PSIsContainer -and $item.Name -eq 'data') { continue }
         if ($item.PSIsContainer) { Get-TreeFiles $item.FullName } else { $item }
     }
     $payload | ForEach-Object {
@@ -45,7 +44,7 @@ try {
     if (-not [IO.File]::Exists($manifest)) {
         throw 'No prepared bundle found. On the online setup machine, first run SETUP.bat and ZIP only bundle contents.'
     }
-    foreach ($path in @($state, $venv, $manifest, $runtime, $project, (Join-Path $Root 'runtime'), (Join-Path $Root 'application'))) {
+    foreach ($path in @($state, $venv, $ready, $manifest, $runtime, $project, (Join-Path $Root 'runtime'), (Join-Path $Root 'application'))) {
         if (Test-Path -LiteralPath $path) { Assert-NotLinked (Get-Item -LiteralPath $path -Force) }
     }
     # Allow concurrent-start rejection without writing into the payload. The
@@ -56,34 +55,40 @@ try {
     if (Test-Path -LiteralPath $lockPath) { Assert-NotLinked (Get-Item -LiteralPath $lockPath -Force) }
     $lock = [IO.File]::Open($lockPath, 'OpenOrCreate', 'ReadWrite', 'None')
     $pins = Read-Pins $project
+    $record = [IO.File]::ReadAllText($manifest, $Utf8) | ConvertFrom-Json
+    if ($record.schema -ne 2) { throw 'Unsupported bundle manifest.' }
     $fingerprint = @($Root, (Get-Hash $manifest), (Get-Hash $project)) -join "`n"
     Set-Location -LiteralPath $Root
     Write-Host "PORTABLE PYTHON (OFFLINE): CPython $($pins['requires-python']), uv $($pins['required-version'])"
 
-    if ([IO.File]::Exists($ready)) {
-        Assert-NotLinked (Get-Item -LiteralPath $ready -Force)
+    $recovery = 'With the app stopped, move .venv out of this folder, then run START.bat to rebuild offline.'
+    Set-LocalEnvironment $state
+    if (Test-Path -LiteralPath $venv) {
+        if (-not [IO.File]::Exists($ready)) {
+            throw "A .venv exists without a readiness marker. $recovery"
+        }
         if ([IO.File]::ReadAllText($ready, $Utf8) -cne $fingerprint) {
             throw 'Bundle was moved after setup or its configuration changed. Use a fresh extraction of a prepared bundle.'
         }
-        Set-LocalEnvironment $state
         $setup = 'SKIPPED'
     } else {
-        if (Test-Path -LiteralPath $venv) {
-            throw 'A .venv exists without a readiness marker. Re-extract the prepared ZIP into a new local folder.'
-        }
         Write-Host 'Please wait: verifying the bundle and installing its wheels offline...'
-        Verify-Bundle
+        Verify-Bundle $record
         if ((Get-Hash (Join-Path $Root 'uv.exe')) -ne $pins['uv-exe-sha256']) {
             throw 'Bundled uv.exe failed pinned SHA-256 verification.'
         }
-        Set-LocalEnvironment $state
+        if ([IO.File]::Exists($ready)) { [IO.File]::Delete($ready) }
         Initialize-OfflineVenv $Root $venv
         $setup = 'PERFORMED'
     }
-    foreach ($path in @((Join-Path $venv 'Scripts'), $python, (Join-Path $venv 'pyvenv.cfg'))) {
-        Assert-NotLinked (Get-Item -LiteralPath $path -Force)
+    try {
+        $packages = @(Read-EnvironmentPackages $venv $pins['requires-python'] $runtime)
+        if (($packages -join "`n") -cne ($record.installed_packages -join "`n")) {
+            throw 'Installed package names or versions differ from the prepared bundle.'
+        }
+    } catch {
+        throw "$($_.Exception.Message) $recovery"
     }
-    Confirm-Interpreter $python $pins['requires-python'] $runtime $venv
     if ($setup -eq 'PERFORMED') { [IO.File]::WriteAllText($ready, $fingerprint, $Utf8) }
     Write-Host 'PORTABLE PYTHON STATUS: READY'
     Write-Host "Setup: $setup"

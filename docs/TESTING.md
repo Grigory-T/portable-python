@@ -105,7 +105,9 @@ Passing tests is not a guarantee that every user package or notebook is safe.
 The Preloaded job prepares stdlib-only and wheel-bearing bundles on Windows,
 zips them, removes their source workspaces, and extracts to a new path with
 spaces, Unicode and brackets. It applies outbound block rules for bundled
-uv and Python on the ephemeral test runner, checks native and pure-Python
-imports, repeat start, damaged-wheel rejection and app exit status, and
-removes the test rules and owned workspaces afterward. The product never
-changes firewall rules.
+uv and Python on the ephemeral test runner. It checks native and pure-Python
+imports, repeat start, isolation, missing package metadata, offline rebuild,
+user-data preservation, absence of a persistent cache, damaged-wheel
+rejection and app exit status. The test removes its rules and owned workspaces.
+This is Windows Server CI, not a clean, disconnected Windows 11 desktop
+acceptance test. The product never changes firewall rules.

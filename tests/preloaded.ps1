@@ -55,6 +55,13 @@ print("WHEELS AND NESTED IMPORTS SUCCESS")
 '@, $utf8)
             [IO.Directory]::CreateDirectory((Join-Path $source 'application\nested')) | Out-Null
             [IO.File]::WriteAllText((Join-Path $source 'application\nested\probe.py'), 'value = 42', $utf8)
+        } else {
+            [IO.File]::WriteAllText((Join-Path $source 'application\__main__.py'), @'
+import os
+if os.getenv('PORTABLE_TEST_EXIT'):
+    raise SystemExit(7)
+print('STDLIB APPLICATION SUCCESS')
+'@, $utf8)
         }
         # Use the actual setup wrapper in the default scenario.
         if ($scenario -eq 'stdlib') {
@@ -94,13 +101,37 @@ print("WHEELS AND NESTED IMPORTS SUCCESS")
         if ($first -notmatch 'Setup: PERFORMED' -or $first -notmatch 'APPLICATION STATUS: SUCCESS') { throw 'Missing first-run success.' }
         if ($scenario -eq 'wheels' -and $first -notmatch 'WHEELS AND NESTED IMPORTS SUCCESS') { throw 'Bundled wheels did not import.' }
         if ((Invoke-Target $target 0) -notmatch 'Setup: SKIPPED') { throw 'Unchanged run did not skip setup.' }
+        if (Test-Path -LiteralPath (Join-Path $target '.portable-python\cache')) { throw 'Offline START retained a uv cache.' }
         if ($scenario -eq 'stdlib') {
             & cmd.exe /d /c ('echo x|call "' + (Join-Path $target 'START.bat') + '"')
             if ($LASTEXITCODE -ne 0) { throw 'START.bat failed.' }
-            $main = Join-Path $target 'application\__main__.py'
-            [IO.File]::WriteAllText($main, 'raise SystemExit(7)', $utf8)
+            $env:PORTABLE_TEST_EXIT = '1'
             if ((Invoke-Target $target 20) -notmatch 'Application exit code: 7') { throw 'Application exit code lost.' }
+            $env:PORTABLE_TEST_EXIT = $null
+            $cfg = Join-Path $target '.venv\pyvenv.cfg'
+            $originalConfig = [IO.File]::ReadAllText($cfg)
+            [IO.File]::WriteAllText($cfg, $originalConfig.Replace('include-system-site-packages = false', 'include-system-site-packages = true'), $utf8)
+            if ((Invoke-Target $target 10) -notmatch 'pyvenv.cfg no longer points') { throw 'Changed isolation was not rejected.' }
+            [IO.File]::WriteAllText($cfg, $originalConfig, $utf8)
         } else {
+            $venv = Join-Path $target '.venv'
+            $site = Join-Path $venv 'Lib\site-packages'
+            $dist = Get-ChildItem -LiteralPath $site -Directory -Filter 'more_itertools-*.dist-info' | Select-Object -First 1
+            [IO.Directory]::Move($dist.FullName, (Join-Path $testRoot 'missing-dist-info'))
+            if ((Invoke-Target $target 10) -notmatch 'Installed package names or versions differ') {
+                throw 'Missing package metadata was not rejected.'
+            }
+            [IO.File]::Delete((Join-Path $target '.portable-python\ready.state'))
+            if ((Invoke-Target $target 10) -notmatch 'without a readiness marker') { throw 'Partial venv accepted.' }
+            # Follow the documented non-destructive recovery, preserving data.
+            [IO.Directory]::Move($venv, (Join-Path $testRoot 'quarantined-venv'))
+            $data = [IO.Directory]::CreateDirectory((Join-Path $target 'data'))
+            $output = Join-Path $data.FullName 'keep.txt'
+            [IO.File]::WriteAllText($output, 'keep', $utf8)
+            $recovered = Invoke-Target $target 0
+            if ($recovered -notmatch 'Setup: PERFORMED' -or $recovered -notmatch 'WHEELS AND NESTED IMPORTS SUCCESS' -or
+                [IO.File]::ReadAllText($output) -ne 'keep') { throw 'Offline recovery failed or changed user data.' }
+
             $bad = Join-Path $testRoot 'damaged'
             [IO.Compression.ZipFile]::ExtractToDirectory($preparedZip, $bad)
             $wheel = Get-ChildItem -LiteralPath (Join-Path $bad 'wheelhouse') -Filter '*.whl' | Select-Object -First 1
