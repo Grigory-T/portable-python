@@ -1,6 +1,6 @@
 [project]
 name = "portable-python-preloaded"
-version = "0.1.1"
+version = "0.1.2"
 description = "Windows application prepared online and installed offline"
 # Select a supported exact CPython build in the selected uv release's catalog.
 requires-python = "==3.13.18"

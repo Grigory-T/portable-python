@@ -1,6 +1,7 @@
 param([Parameter(Mandatory=$true)][string]$Zip, [switch]$BlockNetwork)
 $ErrorActionPreference = 'Stop'
 $utf8 = New-Object Text.UTF8Encoding($false)
+$pins = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'library-pins.json') -Raw | ConvertFrom-Json
 . (Join-Path $PSScriptRoot 'workspace.ps1')
 $starterZip = (Get-Item -LiteralPath $Zip).FullName
 $testRoot = New-TestWorkspace 'preloaded'
@@ -29,26 +30,40 @@ try {
         }
         if ($scenario -eq 'wheels') {
             $project = Join-Path $source 'pyproject.toml'
-            $toml = [IO.File]::ReadAllText($project).Replace('dependencies = []', @'
-dependencies = [
-    "more-itertools==11.1.0",
-    "numpy==2.5.2",
-    "openpyxl>=3.1,<4",
-    "colorama==0.4.6; sys_platform == 'win32'",
-]
-'@)
+            $requirements = @($pins.data.PSObject.Properties | ForEach-Object { "$($_.Name)==$($_.Value)" })
+            $requirements += "colorama==0.4.6; sys_platform == 'win32'"
+            $toml = [IO.File]::ReadAllText($project).Replace('dependencies = []',
+                ('dependencies = ' + (ConvertTo-Json -InputObject $requirements -Compress)))
             [IO.File]::WriteAllText($project, $toml, $utf8)
             [IO.File]::WriteAllText((Join-Path $source 'application\__main__.py'), @'
 from pathlib import Path
+from importlib.metadata import version
+from io import BytesIO
 import sys
+import tomllib
 import colorama
-import numpy
 import openpyxl
+import polars as pl
+import xlrd
+import xlsxwriter
+from python_calamine import CalamineWorkbook
 from .nested.probe import value
 from more_itertools import chunked
 assert Path(sys._base_executable).resolve() == Path("runtime/python.exe").resolve()
-assert sum(numpy.arange(5)) == 10
-assert openpyxl.Workbook().active.title == "Sheet"
+assert sys.version_info[:3] == (3, 13, 18)
+for requirement in tomllib.loads(Path('pyproject.toml').read_text(encoding='utf-8'))['project']['dependencies']:
+    name, expected = requirement.split(';')[0].strip().split('==')
+    assert version(name) == expected, name
+assert pl.DataFrame({"x": [1, 2, 3]})["x"].sum() == 6
+stream = BytesIO()
+with xlsxwriter.Workbook(stream, {"in_memory": True}) as workbook:
+    workbook.add_worksheet("Check").write("A1", 42)
+stream.seek(0)
+workbook = openpyxl.load_workbook(stream, read_only=True)
+assert workbook["Check"]["A1"].value == 42
+workbook.close()
+stream.seek(0)
+assert CalamineWorkbook.from_filelike(stream).get_sheet_by_name("Check").to_python() == [[42]]
 assert list(chunked(range(5), 3)) == [[0, 1, 2], [3, 4]]
 assert value == 42
 print("WHEELS AND NESTED IMPORTS SUCCESS")
@@ -58,10 +73,27 @@ print("WHEELS AND NESTED IMPORTS SUCCESS")
         } else {
             [IO.File]::WriteAllText((Join-Path $source 'application\__main__.py'), @'
 import os
+from pathlib import Path
+import sys
+
 if os.getenv('PORTABLE_TEST_EXIT'):
     raise SystemExit(7)
+assert Path('data').is_dir()
+text = '\u0424\u043e\u0440\u043c\u0438\u0440\u043e\u0432\u0430\u043d\u0438\u0435 | \u0401\u0451 | \u20ac | \u65e5\u672c\u8a9e | \U0001f600'
+print('UTF8_STDOUT|' + text)
+print('UTF8_STDERR|' + text, file=sys.stderr)
+print(text)
+sys.stderr.write('\n\rUTF8_PROGRESS|' + text + '\n')
 print('STDLIB APPLICATION SUCCESS')
 '@, $utf8)
+            $setupLock = [IO.File]::Open((Join-Path $source '.prepare.lock'), 'OpenOrCreate', 'ReadWrite', 'None')
+            try {
+                $blocked = & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $source 'prepare.ps1')
+                if ($LASTEXITCODE -ne 10 -or ($blocked -join "`n") -notmatch 'Workspace lock is unavailable' -or
+                    @(Get-ChildItem -LiteralPath $source -Directory -Filter '.prepare-*').Count) {
+                    throw 'Concurrent SETUP was not rejected before preparation.'
+                }
+            } finally { $setupLock.Dispose() }
         }
         # Use the actual setup wrapper in the default scenario.
         if ($scenario -eq 'stdlib') {
@@ -74,7 +106,7 @@ print('STDLIB APPLICATION SUCCESS')
             throw 'Online preparation left scratch work.'
         }
         $bundle = Join-Path $source 'bundle'
-        foreach ($forbidden in @('.venv', '.portable-python', 'prepare.ps1', 'prepare.py', 'SETUP.bat')) {
+        foreach ($forbidden in @('.venv', '.portable-python', '.prepare.lock', 'prepare.ps1', 'prepare.py', 'SETUP.bat', 'data')) {
             if (Test-Path -LiteralPath (Join-Path $bundle $forbidden)) {
                 throw "Prepared bundle includes unshippable content: $forbidden"
             }
@@ -101,8 +133,10 @@ print('STDLIB APPLICATION SUCCESS')
         if ($first -notmatch 'Setup: PERFORMED' -or $first -notmatch 'APPLICATION STATUS: SUCCESS') { throw 'Missing first-run success.' }
         if ($scenario -eq 'wheels' -and $first -notmatch 'WHEELS AND NESTED IMPORTS SUCCESS') { throw 'Bundled wheels did not import.' }
         if ((Invoke-Target $target 0) -notmatch 'Setup: SKIPPED') { throw 'Unchanged run did not skip setup.' }
+        if (-not [IO.Directory]::Exists((Join-Path $target 'data'))) { throw 'START did not create data/.' }
         if (Test-Path -LiteralPath (Join-Path $target '.portable-python\cache')) { throw 'Offline START retained a uv cache.' }
         if ($scenario -eq 'stdlib') {
+            & (Join-Path $PSScriptRoot 'encoding.ps1') -Launcher (Join-Path $target 'portable-python.ps1') -Root $target -TestRoot $testRoot -Profile Preloaded
             & cmd.exe /d /c ('echo x|call "' + (Join-Path $target 'START.bat') + '"')
             if ($LASTEXITCODE -ne 0) { throw 'START.bat failed.' }
             $env:PORTABLE_TEST_EXIT = '1'

@@ -24,6 +24,15 @@ function Assert-NotLinked($Item) {
     }
 }
 
+function Open-WorkspaceLock([string]$Path) {
+    if (Test-Path -LiteralPath $Path) { Assert-NotLinked (Get-Item -LiteralPath $Path -Force) }
+    try {
+        return [IO.File]::Open($Path, 'OpenOrCreate', 'ReadWrite', 'None')
+    } catch [IO.IOException] {
+        throw 'Workspace lock is unavailable. Check for another SETUP or START in this folder.'
+    }
+}
+
 function Get-TreeFiles([string]$Directory) {
     # Inspect each entry before descending, including hidden files.
     foreach ($item in (Get-ChildItem -LiteralPath $Directory -Force)) {

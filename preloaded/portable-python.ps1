@@ -12,6 +12,7 @@ $runtime = Join-Path $Root 'runtime\python.exe'
 $manifest = Join-Path $Root 'bundle-manifest.json'
 $project = Join-Path $Root 'pyproject.toml'
 $ready = Join-Path $state 'ready.state'
+$data = Join-Path $Root 'data'
 $lock = $null
 $code = 10
 
@@ -44,16 +45,14 @@ try {
     if (-not [IO.File]::Exists($manifest)) {
         throw 'No prepared bundle found. On the online setup machine, first run SETUP.bat and ZIP only bundle contents.'
     }
-    foreach ($path in @($state, $venv, $ready, $manifest, $runtime, $project, (Join-Path $Root 'runtime'), (Join-Path $Root 'application'))) {
+    foreach ($path in @($state, $venv, $ready, $data, $manifest, $runtime, $project, (Join-Path $Root 'runtime'), (Join-Path $Root 'application'))) {
         if (Test-Path -LiteralPath $path) { Assert-NotLinked (Get-Item -LiteralPath $path -Force) }
     }
     # Allow concurrent-start rejection without writing into the payload. The
     # existing opened user script/common are trusted, not signed by the manifest.
     $stateItem = [IO.Directory]::CreateDirectory($state)
     Assert-NotLinked $stateItem
-    $lockPath = Join-Path $state 'workspace.lock'
-    if (Test-Path -LiteralPath $lockPath) { Assert-NotLinked (Get-Item -LiteralPath $lockPath -Force) }
-    $lock = [IO.File]::Open($lockPath, 'OpenOrCreate', 'ReadWrite', 'None')
+    $lock = Open-WorkspaceLock (Join-Path $state 'workspace.lock')
     $pins = Read-Pins $project
     $record = [IO.File]::ReadAllText($manifest, $Utf8) | ConvertFrom-Json
     if ($record.schema -ne 2) { throw 'Unsupported bundle manifest.' }
@@ -90,6 +89,8 @@ try {
         throw "$($_.Exception.Message) $recovery"
     }
     if ($setup -eq 'PERFORMED') { [IO.File]::WriteAllText($ready, $fingerprint, $Utf8) }
+    # The payload is immutable; applications get a writable data root.
+    Assert-NotLinked ([IO.Directory]::CreateDirectory($data))
     Write-Host 'PORTABLE PYTHON STATUS: READY'
     Write-Host "Setup: $setup"
     Write-Host 'Interpreter: .venv\Scripts\python.exe'

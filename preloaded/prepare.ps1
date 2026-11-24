@@ -6,6 +6,7 @@ $Root = $PSScriptRoot
 $originalEncoding = [Console]::OutputEncoding
 $originalLocation = Get-Location
 $stage = $null
+$setupLock = $null
 $code = 10
 
 function Remove-PreparationScratch([string]$Path) {
@@ -24,6 +25,7 @@ function Remove-PreparationScratch([string]$Path) {
 try {
     [Console]::OutputEncoding = $Utf8
     Assert-LocalWindows $Root
+    $setupLock = Open-WorkspaceLock (Join-Path $Root '.prepare.lock')
     $destination = Join-Path $Root 'bundle'
     if (Test-Path -LiteralPath $destination) {
         throw 'bundle already exists. Move it aside or start from a fresh starter ZIP.'
@@ -173,5 +175,6 @@ try {
             $code = 10
         }
     }
+    if ($null -ne $setupLock) { $setupLock.Dispose() }
 }
 exit $code

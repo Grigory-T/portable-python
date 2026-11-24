@@ -26,6 +26,9 @@ Bare names/ranges select versions on this machine. Compatible pure Python,
 Windows AMD64 native and stable-ABI wheels are supported. No source builds,
 custom indexes, direct URLs or git/path dependencies. SETUP resolves anew
 from PyPI; a later preparation can choose newer matching versions.
+Avoid dependency markers based on platform_version or platform_release.
+If they select different packages on the target, START rejects the inventory
+mismatch. Prepare for a matching Windows environment instead.
 
 Double-click SETUP.bat, or from the extracted starter root:
     .\SETUP.bat
@@ -37,6 +40,8 @@ offline install without a persistent cache and records the installed
 package names and versions from that throwaway venv. No app is run.
 Only a successful preparation produces bundle/. Temporary files are
 under the starter folder, not Windows Temp, and are removed when it exits.
+Only one SETUP can run in a starter folder at a time. The empty
+.prepare.lock file is not part of the bundle and may remain between runs.
 
 ZIP only the CONTENTS of bundle/, not the starter, work files or caches.
 For example, in PowerShell from the starter root (choose a new ZIP name):
@@ -65,9 +70,12 @@ missing or damaged package contents can still fail at import time.
 Do not transfer a .venv or move the initialized folder. Move the ZIP or
 unstarted bundle instead. If the configuration or app payload needs to
 change, make a fresh bundle online. Keep the shipped files unchanged and
-put writable inputs/results in data/ or outside the bundle. START does not
+put writable inputs/results in data/ (created by START before running the
+app) or outside the bundle. START does not
 rehash application or runtime files on every run. Use sys.executable for
 Python subprocesses; plain "python" can select a different interpreter.
+The technical launcher displays combined, line-oriented stdout/stderr.
+Full-screen console apps and ANSI cursor/colour control are not guaranteed.
 
 To recover a damaged or interrupted .venv, stop the app and move only the
 .venv directory outside the bundle. Run START.bat again. It verifies the

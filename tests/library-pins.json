@@ -1,0 +1,16 @@
+{
+  "data": {
+    "polars": "1.44.2",
+    "python-calamine": "0.8.3",
+    "xlsxwriter": "3.2.9",
+    "openpyxl": "3.1.5",
+    "xlrd": "2.0.2",
+    "more-itertools": "11.2.1"
+  },
+  "notebook": {
+    "jupyterlab": "4.6.4",
+    "ipykernel": "7.4.0",
+    "ipython": "9.17.1",
+    "psutil": "7.2.2"
+  }
+}

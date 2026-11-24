@@ -48,7 +48,7 @@ unchanged start, actual START.bat, nested absolute/relative imports, original
 app exit code, configuration-drift refusal, neutral journal, and a fresh
 custom PyPI version-range requirement.
 
-Shared `tests/encoding.ps1` exercises the actual prepared launchers in Windows
+Shared `tests/encoding.ps1` exercises all three actual prepared launchers in Windows
 PowerShell 5.1 and, when installed, PowerShell 7. It captures Information-stream
 strings before another byte conversion can disguise corruption. Under code
 pages 437, 866, 1251 and 65001 it verifies exact Cyrillic/euro/CJK/emoji output,
@@ -107,7 +107,14 @@ zips them, removes their source workspaces, and extracts to a new path with
 spaces, Unicode and brackets. It applies outbound block rules for bundled
 uv and Python on the ephemeral test runner. It checks native and pure-Python
 imports, repeat start, isolation, missing package metadata, offline rebuild,
-user-data preservation, absence of a persistent cache, damaged-wheel
-rejection and app exit status. The test removes its rules and owned workspaces.
+automatic `data/` creation, user-data preservation, concurrent SETUP rejection,
+absence of a persistent cache, damaged-wheel rejection and app exit status.
+The test removes its rules and owned workspaces.
 This is Windows Server CI, not a clean, disconnected Windows 11 desktop
 acceptance test. The product never changes firewall rules.
+
+`tests/library-pins.json` contains an exact compatibility sample, not
+production defaults. Preloaded exercises Polars (Windows stable ABI), Calamine
+(CPython 3.13 wheel), and an in-memory Excel write/read round-trip. JupyterLab
+checks the notebook pins and psutil in the live kernel. The existing
+stdlib-only and default notebook setups are still tested first.

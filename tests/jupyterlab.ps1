@@ -1,6 +1,8 @@
 param([Parameter(Mandatory=$true)][string]$Zip, [switch]$Audit, [switch]$KeepWorkspace)
 $ErrorActionPreference = 'Stop'
 $utf8 = New-Object Text.UTF8Encoding($false)
+$pinsPath = Join-Path $PSScriptRoot 'library-pins.json'
+$pins = Get-Content -LiteralPath $pinsPath -Raw | ConvertFrom-Json
 . (Join-Path $PSScriptRoot 'workspace.ps1')
 $testRoot = New-TestWorkspace 'jupyterlab'
 $server = $null
@@ -72,7 +74,7 @@ function Invoke-Profile([int]$Expected = 0) {
     Invoke-Profile
 
     $project = [IO.File]::ReadAllText($projectPath)
-    [IO.File]::WriteAllText($projectPath, $project.Replace('dependencies = []', 'dependencies = ["more-itertools==11.1.0"]'), $utf8)
+    [IO.File]::WriteAllText($projectPath, $project.Replace('dependencies = []', ('dependencies = ["more-itertools==' + $pins.data.'more-itertools' + '"]')), $utf8)
     Invoke-Profile
     if ($lastOutput -notmatch 'Setup:\s+UPDATED') { throw 'Library addition did not update' }
     & $venvPython -I -c "import more_itertools; assert list(more_itertools.chunked(range(3),2))==[[0,1],[2]]"
@@ -92,9 +94,13 @@ function Invoke-Profile([int]$Expected = 0) {
     Invoke-Profile
 
     # Exact reported sequence: start with openpyxl, then add polars and restart.
-    [IO.File]::WriteAllText($projectPath, $project.Replace('dependencies = []', 'dependencies = ["openpyxl"]'), $utf8)
+    $notebookExtras = @("ipython==$($pins.notebook.ipython)", "psutil==$($pins.notebook.psutil)", "openpyxl==$($pins.data.openpyxl)")
+    [IO.File]::WriteAllText($projectPath, $project.Replace('dependencies = []',
+        ('dependencies = ' + (ConvertTo-Json -InputObject $notebookExtras -Compress))), $utf8)
     Invoke-Profile
-    [IO.File]::WriteAllText($projectPath, $project.Replace('dependencies = []', 'dependencies = ["openpyxl", "polars"]'), $utf8)
+    $notebookExtras += "polars==$($pins.data.polars)"
+    [IO.File]::WriteAllText($projectPath, $project.Replace('dependencies = []',
+        ('dependencies = ' + (ConvertTo-Json -InputObject $notebookExtras -Compress))), $utf8)
     Invoke-Profile
     if ($lastOutput -notmatch 'Setup:\s+UPDATED') { throw 'Polars addition did not update' }
     & $venvPython -I -c "import openpyxl,polars as pl; assert pl.DataFrame(dict(x=[1,2])).select(pl.col('x').sum()).item()==3; print('POLARS IMPORT AND COMPUTE SUCCESS',pl.__version__)"
@@ -164,6 +170,7 @@ from datetime import datetime, timezone
 import websocket
 
 root = pathlib.Path(sys.argv[1]).resolve()
+pins = json.loads(pathlib.Path(sys.argv[2]).read_text(encoding="utf-8"))
 runtime = root / ".portable-jupyter" / "jupyter-runtime"
 info = json.loads(next(runtime.glob("jpserver-*.json")).read_text(encoding="utf-8"))
 opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
@@ -193,6 +200,9 @@ ws_url = info["url"].replace("http://", "ws://") + "api/kernels/" + session["ker
 channel = websocket.create_connection(ws_url, timeout=45, origin=info["url"].rstrip("/"), http_no_proxy=["127.0.0.1", "localhost"])
 try:
     code = "import os,pathlib,site,sys,openpyxl,polars as pl; assert pl.DataFrame(dict(x=[1,2])).select(pl.col('x').sum()).item()==3; assert not any(k in os.environ for k in ('SSL_CERT_FILE','SSL_CERT_DIR','BROWSER')); assert sys.version_info[:3]==(3,13,18); assert pathlib.Path(sys.prefix).resolve()==pathlib.Path(" + repr(str(root / ".venv")) + ").resolve(); assert not site.ENABLE_USER_SITE; assert pathlib.Path.cwd().resolve()==pathlib.Path(" + repr(str(root / "notebooks" / "nested")) + ").resolve(); print('LOCAL KERNEL EXECUTION AND POLARS COMPUTE SUCCESS')"
+    expected = pins["notebook"] | {name: pins["data"][name] for name in ("openpyxl", "polars")}
+    code += "; from importlib.metadata import version; assert all(version(name) == pin for name, pin in " + repr(expected) + ".items())"
+    code += "; import psutil; assert psutil.Process().pid == os.getpid()"
     unicode_text = '\u0424\u043e\u0440\u043c\u0438\u0440\u043e\u0432\u0430\u043d\u0438\u0435 | \u0401\u0451 | \u20ac | \u65e5\u672c\u8a9e | \U0001f600'
     code += "; print(" + repr(unicode_text) + ")"
     msg_id = uuid.uuid4().hex
@@ -223,7 +233,7 @@ api("shutdown", "POST", {})
 '@
     $probePath = Join-Path $testRoot 'probe.py'
     [IO.File]::WriteAllText($probePath, $probe, $utf8)
-    & $venvPython -I -X utf8 $probePath $root
+    & $venvPython -I -X utf8 $probePath $root $pinsPath
     if ($LASTEXITCODE -ne 0) { throw 'Server/kernel API probe failed' }
     # Wait for the owned launcher, not asynchronous redirected-stream events.
     # CI/antivirus/kernel cleanup can take longer than a desktop's 30 seconds.

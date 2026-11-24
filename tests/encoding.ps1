@@ -2,7 +2,7 @@ param(
     [Parameter(Mandatory=$true)][string]$Launcher,
     [Parameter(Mandatory=$true)][string]$Root,
     [Parameter(Mandatory=$true)][string]$TestRoot,
-    [ValidateSet('Application','Jupyter')][string]$Profile
+    [ValidateSet('Application','Jupyter','Preloaded')][string]$Profile
 )
 $ErrorActionPreference = 'Stop'
 # Run the actual launcher in its own shell and capture its Information stream
@@ -71,6 +71,15 @@ print('UTF8_CHILD_SUCCESS')
         [IO.File]::WriteAllBytes($main, $originalMain)
         [IO.File]::AppendAllText($projectPath, "`n# changed configuration`n", $utf8)
         [void](Invoke-Captured 10 437)
+    } elseif ($Profile -eq 'Preloaded') {
+        # The fixture was packaged before preparation; do not edit its payload.
+        foreach ($page in @(437,866,1251,65001)) {
+            $output = Invoke-Captured 0 $page
+            foreach ($expected in @(('UTF8_STDOUT|' + $text), ('UTF8_STDERR|' + $text), ('UTF8_PROGRESS|' + $text))) {
+                if (-not $output.Contains($expected)) { throw "Unicode output mismatch at code page $page" }
+            }
+            if ($output.Contains('System.Management.Automation.RemoteException')) { throw 'Blank stderr was exposed as an exception type name' }
+        }
     } else {
         [void](Invoke-Captured 0 437)
         # Policy rejects this direct URL before any package resolution/download.
