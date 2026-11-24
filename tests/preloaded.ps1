@@ -124,7 +124,17 @@ print('STDLIB APPLICATION SUCCESS')
             [IO.File]::Delete((Join-Path $target '.portable-python\ready.state'))
             if ((Invoke-Target $target 10) -notmatch 'without a readiness marker') { throw 'Partial venv accepted.' }
             # Follow the documented non-destructive recovery, preserving data.
-            [IO.Directory]::Move($venv, (Join-Path $testRoot 'quarantined-venv'))
+            # Windows scanners may briefly hold installed binaries even
+            # though the launcher and its Python child have both exited.
+            for ($attempt = 0; $attempt -lt 5; $attempt++) {
+                try {
+                    [IO.Directory]::Move($venv, (Join-Path $testRoot 'quarantined-venv'))
+                    break
+                } catch {
+                    if ($attempt -eq 4) { throw }
+                    Start-Sleep -Seconds 1
+                }
+            }
             $data = [IO.Directory]::CreateDirectory((Join-Path $target 'data'))
             $output = Join-Path $data.FullName 'keep.txt'
             [IO.File]::WriteAllText($output, 'keep', $utf8)
