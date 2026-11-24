@@ -111,7 +111,7 @@ function Initialize-OfflineVenv([string]$Bundle, [string]$Venv) {
     $links = if ([IO.Directory]::Exists($wheels)) { @('--find-links', $wheels) } else { @() }
     Invoke-Checked 'offline_wheel_install' $uv ($flags + @(
         'pip', 'sync', '--python', $python, '--no-index', '--require-hashes',
-        '--no-build', '--only-binary', ':all:', '--allow-empty-requirements',
+        '--no-build', '--allow-empty-requirements',
         '--link-mode', 'copy'
     ) + $links + @($requirements))
     Invoke-Checked 'dependency_check' $uv ($flags + @('pip', 'check', '--python', $python))

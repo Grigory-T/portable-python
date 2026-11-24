@@ -7,6 +7,20 @@ $originalEncoding = [Console]::OutputEncoding
 $originalLocation = Get-Location
 $stage = $null
 $code = 10
+
+function Remove-PreparationScratch([string]$Path) {
+    # Only for this invocation's own scratch directory. Antivirus/file handles
+    # can briefly hold freshly extracted binaries on Windows.
+    for ($attempt = 0; $attempt -lt 3; $attempt++) {
+        try {
+            if ([IO.Directory]::Exists($Path)) { [IO.Directory]::Delete($Path, $true) }
+            return
+        } catch {
+            if ($attempt -eq 2) { throw }
+            Start-Sleep -Milliseconds 500
+        }
+    }
+}
 try {
     [Console]::OutputEncoding = $Utf8
     Assert-LocalWindows $Root
@@ -141,7 +155,7 @@ try {
     Invoke-Checked 'manifest' $python ($pythonFlags + @('manifest', $bundle))
 
     Set-Location -LiteralPath $Root
-    [IO.Directory]::Delete($work, $true)
+    Remove-PreparationScratch $work
     [IO.Directory]::Move($bundle, $destination)
     Write-Host 'PREPARATION SUCCESS: ZIP the contents of bundle, not this starter folder.'
     $code = 0
@@ -152,9 +166,9 @@ try {
     [Console]::OutputEncoding = $originalEncoding
     if ($null -ne $stage -and [IO.Directory]::Exists($stage)) {
         try {
-            [IO.Directory]::Delete($stage, $true)
+            Remove-PreparationScratch $stage
         } catch {
-            Write-Host 'PREPARATION CLEANUP FAILED: review the retained .prepare-* folder before retrying.' -ForegroundColor Red
+            Write-Host "PREPARATION CLEANUP FAILED: review the retained .prepare-* folder before retrying. $($_.Exception.Message)" -ForegroundColor Red
             $code = 10
         }
     }
