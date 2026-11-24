@@ -101,7 +101,7 @@ review, not a certification, penetration test or guarantee of harmless dependenc
 | Stale base config can disable token auth | Valid defense-in-depth finding. Fix it even though malicious write access to the project already defeats the trust model. |
 | Readable/writable folder always means code execution | Too broad: writing trusted code/config is dangerous; merely reading public source is not equivalent. Authentication files must remain private. |
 | All PYTHON variables are cleared | Incorrect. Selected overrides are cleared; interpreter flags ignore Python-specific settings. Other inherited values remain accessible to code. |
-| Signed commits establish publisher identity | Incomplete. Existing SSH signatures are not GitHub-verified for the neutral author. No independent signing-key trust anchor is claimed. |
+| Signed commits establish publisher identity | A GitHub-verified SSH signature links an exact commit to a signing key registered on a GitHub account. The commit SHA identifies the source revision; it does not authenticate a release ZIP or certify the code. |
 | Use New-Item -LiteralPath | Not a portable fix: New-Item does not provide that parameter. Use literal .NET Directory.CreateDirectory and test bracket paths. |
 | TLS 1.2 must be replaced for security | Not established. Keep the compatible TLS 1.2 bootstrap; certificate validation and current trust roots matter. TLS 1.2 alone is not a demonstrated defect. |
 | More signatures/review gates/CodeQL/Dependabot | Useful in suitable workflows, not a substitute for runtime trust. Avoid adding a second signing infrastructure or mandatory multi-reviewer workflow to this small tool. PS1 is the primary runtime logic; Python-only scanning cannot certify it. |

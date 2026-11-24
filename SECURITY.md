@@ -30,12 +30,16 @@ package imports or arbitrary code behavior. Other inherited environment values
 to avoid project-root startup hooks; this does not sandbox installed dependencies.
 
 Please report vulnerabilities privately through this repository's **Security
-advisories / Report a vulnerability** feature. Do not post tokens, usernames,
+advisories / Report a vulnerability** feature. Do not post tokens, local usernames,
 local paths, private URLs, notebook data, or credentials in public issues.
 For ordinary bugs, provide a minimal example and redacted diagnostics.
 
 ## Trust boundaries
 
+- Use the full commit SHA to identify the exact source revision, and check the
+  [GitHub signature status](https://docs.github.com/en/authentication/troubleshooting-commit-signature-verification/checking-your-commit-and-tag-signature-verification-status)
+  for its signing identity. A commit SHA alone does not show who signed the
+  commit or authenticate the release ZIP.
 - Review the ZIP source and compare its SHA-256 with the release notes before
   execution when authenticity matters. Release-note hashes detect corruption;
   they are not independent signatures or protection from a compromised account.

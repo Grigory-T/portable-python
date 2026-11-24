@@ -22,8 +22,8 @@ certification or comprehensive legal audit.
 ## Checks performed
 
 - Explicit file allowlist; no existing repository history, generated runtime,
-  personal configuration, private endpoints, real usernames, or saved notebook
-  output in the public source/archives. Commit metadata is project-neutral.
+  personal configuration, private endpoints, local usernames, or saved notebook
+  output in the public source/archives.
 - Deterministic ZIP rebuild, SHA-256, Python/TOML/notebook/PowerShell syntax,
   MIT inclusion, and artifact/source correspondence.
 - Fresh Windows PowerShell 5.1 setup and normal/repeated application run,
