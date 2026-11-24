@@ -1,15 +1,17 @@
 # portable-python
 
-Two small, transparent Python launchers for **Windows 11 x86-64 (AMD64)**.
+Three small, transparent Python tools for **Windows 11 x86-64 (AMD64)**.
 No preinstalled Python or uv. No administrator installation. No global PATH
-or registry changes. Initial setup requires Internet access.
+or registry changes. Choose online setup on the target or separate online
+preparation for an offline application target.
 
 ## Download, unpack, run
 
 1. Download one ZIP from **[Releases](../../releases/latest)** (not GitHub's
    automatic “Source code” archive).
 2. Unpack into a new folder on a local fixed drive.
-3. Double-click **START.bat**.
+3. For the online application and JupyterLab, double-click **START.bat**.
+   For Preloaded, first follow the two-machine workflow below.
 
 First start downloads and verifies uv and CPython, installs packages into a
 local `.venv`, then runs the example or opens JupyterLab in your browser.
@@ -20,20 +22,32 @@ can take several minutes; unchanged later starts skip package setup.
 |---|---|---|
 | `portable-python-one-launcher-0.1.4-windows-x86_64.zip` | Ordinary Python application | `application/`; entry point `__main__.py` |
 | `portable-python-jupyterlab-0.1.4-windows-x86_64.zip` | Interactive notebooks | `notebooks/`; create or copy `.ipynb` files |
+| `portable-python-preloaded-0.1.0-windows-x86_64.zip` | Prepare a self-contained application bundle for offline targets | `application/`; entry point `__main__.py` |
 
-Both are usable immediately. The application example uses only the standard
+The online editions are usable immediately. The application examples use only the standard
 library. The notebook example checks its actual interpreter and directory.
 The ZIPs contain readable text source, not an opaque installer or executable.
 
-Only these two general tools are maintained. Customize application/notebook
-content and `pyproject.toml`, not a project-specific copy of the bootstrap.
-**START.bat is the sole normal user entry point** for both first preparation
-and subsequent sessions; there is no separate required SETUP step.
+### Preloaded: online setup machine → offline target
+
+1. **Online Windows machine:** Extract the Preloaded starter ZIP. Edit
+   `pyproject.toml` and `application/`, then run **SETUP.bat**.
+2. **Online Windows machine:** ZIP only the contents of the resulting
+   `bundle/`. It contains verified uv, CPython, wheels and a hashed install
+   plan. It contains no `.venv` or setup cache.
+3. **Offline Windows machine:** Verify the ZIP hash, extract into a fresh
+   local folder, and run **START.bat**. It creates a local `.venv` from the
+   bundled runtime, installs wheels without network, and runs the app.
+   Later starts skip installation. Keep the target network blocked by policy
+   if the application itself must not contact the network.
+
+The third release ZIP is the **starter**, not the large prepared bundle. See
+[the included guide](preloaded/README.txt) for commands and the file contract.
 
 ## Supported environment
 
 This is a **Windows-specific bootstrap**, not a universal Python distribution.
-The following applies to both ZIPs; the application/libraries may add requirements.
+The following applies to all profiles; the application/libraries may add requirements.
 
 | Area | Support / assumption |
 |---|---|
@@ -45,7 +59,7 @@ The following applies to both ZIPs; the application/libraries may add requiremen
 | Runtime/build tools | No preinstalled Python, uv, pip, compiler, SDK, Git, Node.js or Docker required. Only compatible wheels are installed; no source compilation. Windows system DLLs remain necessary; extra libraries may need external DLLs/drivers. |
 | Storage | Writable local **fixed-drive** folder, SSD or HDD; SSD is faster. No network/UNC/mapped drives, removable-type drives, junctions or symlinks. Do not move a prepared environment. |
 | RAM/CPU/disk | No measured project-wide minimum. Allow resources for Windows, Python, caches, installed libraries and your data. No GPU/CUDA required by the defaults; selected libraries can change this. |
-| Network | First setup and package changes need DNS and HTTPS access to official sources. Ethernet, Wi-Fi or mobile Internet are equivalent. VPN/proxy use is conditional on working access/authentication. |
+| Network | Online profiles need DNS/HTTPS on first setup. Preloaded needs Internet only on its preparation machine. Ethernet, Wi-Fi or mobile Internet are equivalent if DNS/HTTPS/proxy authentication works. |
 | Permissions | Standard user with permission to write the folder and execute downloaded EXEs/DLLs and PowerShell. No administrator install; organization-enforced controls are not overridden. |
 | JupyterLab | A modern JavaScript-enabled browser and permitted loopback HTTP/WebSocket connections. Server and browser run locally; no public listening port is required. |
 
@@ -64,7 +78,7 @@ Version policy: keep the mature Python 3.13 line while it remains suitable and
 security-supported; review security patch releases rather than freezing a patch
 forever. The current baseline is uv 0.13.6 + CPython 3.13.18, including upstream
 certificate-security fixes. Neither pin is an LTS guarantee or proof of zero
-vulnerabilities. Future changes require official checksum verification and both
+vulnerabilities. Future changes require official checksum verification and all
 Windows acceptance suites. Do not self-update the pinned project-local uv.
 See the [version review](docs/SECURITY-REVIEW.md).
 
@@ -95,7 +109,7 @@ Own libraries always go in `[project].dependencies`. Preserve the remaining
 tool/index tables. See the README inside each ZIP for version notation and
 technical commands. Unavailable Python builds or wheels fail explicitly.
 
-## Two lifecycles
+## Profile lifecycles
 
 - **Application:** first START prepares, then runs `python -m application`.
   Later starts only validate/run. For changed Python/library/launcher settings,
@@ -104,20 +118,22 @@ technical commands. Unavailable Python builds or wheels fail explicitly.
   token authentication. To change libraries, stop server/kernels, edit TOML,
   then START again. Notebooks are retained. Closing the browser does not stop
   the server; use **File > Shut Down** or Ctrl+C in the console.
+- **Preloaded:** only SETUP resolves/downloads, on a separate online machine.
+  Offline START initializes or reuses the target's own `.venv`.
 
 Jupyter checks installed packages locally before skipping setup and prints
 installed versions of declared user libraries. Save changes in this extraction's
 TOML, stop its server, then START again. If the browser does not open, copy the
 **full localhost URL including its token** from the console; keep it private.
 
-Both distinguish setup failure (overall code `10`) from app/server failure
+All distinguish setup failure (overall code `10`) from app/server failure
 (`20`), with `0` success and `30` launcher failure. Local JSONL journals record
-infrastructure progress/status; notebook contents and application output are
-not deliberately copied into those journals.
+infrastructure diagnostics in the online profiles; Preloaded displays its
+diagnostics in the console. Application output is not journaled.
 
 ## UTF-8 output
 
-Both launchers pair Python's `-X utf8` with explicit PowerShell UTF-8 decoding
+All launchers pair Python's `-X utf8` with explicit PowerShell UTF-8 decoding
 of native stdout/stderr and restore the prior console encoding in `finally`.
 Ordinary Unicode `print()` calls need no application `reconfigure()` patch.
 No global Windows setting or lossy `errors="replace"` policy is imposed.
@@ -135,11 +151,11 @@ terminal font coverage remain separate concerns. See each ZIP's README.
 - Run only trusted application/notebook code and reviewed packages, as a normal
   Windows user, in a private local project folder. Code runs with that user's
   filesystem/network permissions; this is not a sandbox or malware scanner.
-- First setup deliberately resolves packages live on the target. `uv.lock`
-  records that result; it is not a pre-audited dependency graph shipped in the
-  ZIP. CI checks its test installations against OSV, not arbitrary future graphs.
+- The online profiles resolve packages live on the target. Preloaded resolves
+  on the setup machine and transfers its lock and wheels. Starter ZIPs do not
+  contain a pre-audited dependency graph.
 - Windows 11 AMD64 with 64-bit Windows PowerShell 5.1 is the tested target.
-  Linux, macOS, ARM64, 32-bit Windows and offline first setup are not supported.
+  Linux, macOS, ARM64 and 32-bit Windows are not supported.
 - Run from a local folder, never directly from a network share or ZIP preview.
   Spaces/Unicode names are tested; ordinary Windows path limits still apply.
 - Downloads use official Astral and PyPI sources, TLS verification and pinned
@@ -171,6 +187,7 @@ do not overwrite an older prepared environment.
 ```text
 python/       application ZIP source
 jupyterlab/   notebook ZIP source
+preloaded/    offline application preparation/launch source
 scripts/      offline release builder
 tests/        Windows acceptance tests
 docs/         download and security review details
@@ -183,7 +200,7 @@ python scripts/build.py
 ```
 
 This deterministic, network-free build checks the explicit source allowlist,
-TOML, Python/notebook syntax and PowerShell syntax, then creates only two ZIPs
+TOML, Python/notebook syntax and PowerShell syntax, then creates three starter ZIPs
 under `dist/`. Each includes LICENSE and THIRD_PARTY.md. CI additionally runs
 fresh Windows setup/application/kernel acceptance, using only upstream Internet
 downloads. See [testing](docs/TESTING.md).

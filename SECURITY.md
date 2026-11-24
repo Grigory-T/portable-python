@@ -3,7 +3,8 @@
 ## Scope and supported release
 
 The latest published release is maintained. Tested target: Windows 11 AMD64,
-64-bit Windows PowerShell 5.1, standard-user permissions, and Internet access.
+64-bit Windows PowerShell 5.1 and standard-user permissions. Preloaded needs
+Internet on the preparation machine only; the online profiles need it on target.
 Older local copies do not update themselves. Use a fresh extraction when
 upgrading this bootstrap; copy only reviewed application/notebook data.
 
@@ -115,9 +116,13 @@ date. The default graph was tested/reviewed at release time, not guaranteed
 free of vulnerabilities forever. User-selected libraries require their own
 security/license review.
 
-Live resolution is an explicit design requirement: users choose Python and
-libraries on the target without a preparation-machine step. Shipping a locked
-default graph would not cover those choices and would need a separate workflow.
+The online profiles resolve on the target. Preloaded resolves on a dedicated
+online machine and transfers verified runtime files, wheel hashes and the
+locked graph. The manifest checks transfer integrity on first start, not
+authenticity against a replaced launcher/manifest. Verify the prepared archive
+hash from a trusted channel and keep the extracted folder private. Offline uv
+settings do not restrict network access by application code; use host or
+network policy for that boundary.
 The generated lock freezes that installation, not all future fresh installations.
 CI additionally checks its installed package versions against OSV; failure or
 service unavailability is not called clean. This check is not run by START and
@@ -142,5 +147,5 @@ future security patches and retest rather than indefinitely freezing these pins.
 
 Before updating pins: inspect upstream advisories/licenses, independently check
 published artifact checksums, inspect the uv catalog, test compatible Windows
-wheels, run both acceptance suites, and publish source/tag/ZIPs together.
+wheels, run all acceptance suites, and publish source/tag/ZIPs together.
 Do not update only a version string while retaining unrelated hashes.

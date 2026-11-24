@@ -8,7 +8,7 @@ Build machine: Python 3.11+ and PowerShell (`pwsh` or `powershell.exe`).
 python scripts/build.py
 ```
 
-The builder makes exactly two deterministic ZIPs, including MIT and third-party
+The builder makes three deterministic starter ZIPs, including MIT and third-party
 notices. It uses an explicit file allowlist; no venv, runtime, cache, lock, saved
 notebook output, hidden user configuration or existing git history is included.
 It does not download or execute uv/CPython. SHA-256 is printed for release notes.
@@ -101,3 +101,11 @@ not a code audit or proof that a later target resolution is safe.
 Release verification also includes a manual privacy scan, official artifact
 checksum comparison, upstream advisory review, and limited license review.
 Passing tests is not a guarantee that every user package or notebook is safe.
+The Preloaded job prepares stdlib-only and wheel-bearing bundles on Windows,
+zips them, removes their source workspaces, and extracts to a new path with
+spaces, Unicode and brackets. It applies outbound block rules for bundled
+uv and Python on the ephemeral test runner, checks native and pure-Python
+imports, repeat start, damaged-wheel rejection and app exit status, and
+removes the test rules and owned workspaces afterward. The product never
+changes firewall rules.
+

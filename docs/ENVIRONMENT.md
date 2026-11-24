@@ -1,7 +1,7 @@
 # Environment contract
 
-Applies to both Windows application and JupyterLab ZIPs. Reviewed 2026-10-21.
-This documents the existing implementation; it does not add platform support.
+Applies to the Windows application, JupyterLab and Preloaded tools. Preloaded
+uses the same Windows target with Internet required only on the setup machine.
 
 ## Supported target versus upstream capability
 
@@ -93,6 +93,9 @@ Their wider support is not this project's support promise.
   is not guaranteed. An approved working network/proxy configuration is required.
 - Unchanged later starts skip setup downloads. Application/notebook code or
   third-party packages may still require Internet; offline operation is not universal.
+- Preloaded's offline target needs no DNS or Internet for first installation.
+  No installer firewall changes are made. Target network denial is the
+  responsibility of the host/network, including for app/library code.
 - Jupyter needs a modern JavaScript-enabled browser with loopback HTTP and
   WebSocket access. It binds only to `127.0.0.1` with token authentication and
   needs an available local TCP port (default Jupyter port, with retries).

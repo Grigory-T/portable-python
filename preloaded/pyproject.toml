@@ -1,0 +1,21 @@
+[project]
+name = "portable-python-preloaded"
+version = "0.1.0"
+description = "Windows application prepared online and installed offline"
+# Select a supported exact CPython build in the selected uv release's catalog.
+requires-python = "==3.13.18"
+# Use ordinary PyPI names, optionally with a pin, range, extras or marker.
+dependencies = []
+
+[tool.uv]
+package = false
+required-version = "==0.13.6"
+
+[tool.portable-python]
+uv-archive-sha256 = "a2a8820d5eea32f08ef467ef3b7f66883a9b076d5737a2fc2fbb5f458d1bb50f"
+uv-exe-sha256 = "81ea623608f8c17720c62efd0a380a8ead380c4d365ba6968e9d279a2319c674"
+
+[[tool.uv.index]]
+name = "pypi"
+url = "https://pypi.org/simple"
+default = true

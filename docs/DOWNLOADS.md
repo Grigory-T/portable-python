@@ -1,7 +1,8 @@
 # Downloads and provenance
 
-The target downloads executable/package artifacts; the release ZIPs contain
-only this project's text source, examples and license notices.
+The online profiles download on the target. Preloaded downloads on the setup
+machine only; the offline target consumes its prepared bundle. Release starter
+ZIPs contain only this project's text source, examples and license notices.
 
 ## uv 0.13.6
 
@@ -107,6 +108,20 @@ Unchanged application starts perform no infrastructure download. Jupyter's
 extension installer is read-only and built-in news/update polling is disabled.
 Notebook/application code and user-installed third-party packages can still
 make their own requests. The launcher is not a network sandbox.
+
+### Preloaded preparation
+
+SETUP downloads the pinned uv archive with PowerShell, then retrieves license
+terms from `https://raw.githubusercontent.com/astral-sh/uv/<version>/LICENSE-MIT`
+and `…/LICENSE-APACHE` (same path). uv downloads CPython from its pinned catalog.
+uv locks against PyPI and the bundled CPython's standard-library HTTPS client
+downloads matching wheels from the locked `files.pythonhosted.org/packages/`
+URLs without redirects, checking each locked SHA-256. The exact URLs are
+printed and retained in `provenance.json` / `uv.lock`.
+
+START contains no downloader. It uses the bundle runtime and a local flat
+wheelhouse with uv `--offline --no-config --no-python-downloads`, and sync adds
+`--no-index --no-build --require-hashes`. The local `.venv` is never shipped.
 
 ## Developer/CI advisory check only
 

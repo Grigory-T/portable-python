@@ -24,3 +24,15 @@ jobs:
       - name: JupyterLab acceptance
         shell: powershell
         run: ./tests/jupyterlab.ps1 -Zip ./dist/portable-python-jupyterlab-0.1.4-windows-x86_64.zip -Audit
+  preloaded:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Build the preloaded starter ZIP
+        run: python scripts/build.py --profile preloaded
+      - name: Prepare, repackage, and launch offline from a different path
+        shell: powershell
+        run: ./tests/preloaded.ps1 -Zip ./dist/portable-python-preloaded-0.1.0-windows-x86_64.zip -BlockNetwork

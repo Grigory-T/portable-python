@@ -3,7 +3,7 @@
 $script:TestWorkspaceBase = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\.test-workspaces'))
 
 function New-TestWorkspace {
-    param([ValidateSet('application', 'jupyterlab', 'cleanup')][string]$Profile)
+    param([ValidateSet('application', 'jupyterlab', 'preloaded', 'cleanup')][string]$Profile)
     $tempPaths = @([IO.Path]::GetTempPath(), $env:TEMP, $env:TMP)
     if ($env:SystemRoot) { $tempPaths += (Join-Path $env:SystemRoot 'Temp') }
     foreach ($tempPath in $tempPaths) {
@@ -34,7 +34,7 @@ function Complete-TestWorkspace {
     $fullPath = [IO.Path]::GetFullPath($Path)
     $name = [IO.Path]::GetFileName($fullPath)
     $parent = [IO.Path]::GetDirectoryName($fullPath)
-    if ($parent -ne $TestWorkspaceBase -or $name -notmatch '^(application|jupyterlab|cleanup)-[a-f0-9]{32}$') {
+    if ($parent -ne $TestWorkspaceBase -or $name -notmatch '^(application|jupyterlab|preloaded|cleanup)-[a-f0-9]{32}$') {
         throw 'Refusing cleanup outside the exact test-created workspace.'
     }
     if (-not (Test-Path -LiteralPath $fullPath)) { return }

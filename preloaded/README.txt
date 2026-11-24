@@ -1,0 +1,93 @@
+PORTABLE PYTHON PRELOADED — Windows 11 x86-64
+
+Both machines need 64-bit Windows PowerShell 5.1, a private writable
+folder on a local fixed drive and permission to run the bundled code.
+No admin install, global PATH changes, system Python, pip or compilers.
+
+1. ONLINE SETUP MACHINE
+
+Unpack the small starter ZIP into a fresh local folder. Put your trusted
+Python package in application/ (entry point: application/__main__.py).
+Nested modules and relative imports work normally. Run context is the bundle
+root with "python -m application"; use UTF-8 for Python source and make data
+paths relative to __file__ or the bundle root, not to the setup machine.
+
+Edit pyproject.toml before SETUP. Exact CPython and uv pins default to
+3.13.18 and 0.13.6. Choose a normal Windows AMD64 CPython 3.11–3.14 build
+listed in the pinned uv catalog, preferably a supported security patch.
+Changing uv requires replacing both uv SHA-256 pins with independently
+verified hashes of the official ZIP and the extracted uv.exe.
+
+Examples for project.dependencies (choose one list):
+    dependencies = []
+    dependencies = ["more-itertools==11.1.0"]
+    dependencies = ["openpyxl>=3.1,<4", "polars"]
+Bare names/ranges select versions on this machine. Compatible pure Python,
+Windows AMD64 native and stable-ABI wheels are supported. No source builds,
+custom indexes, direct URLs, git/path dependencies or offline re-resolving.
+
+Double-click SETUP.bat, or from the extracted starter root:
+    .\SETUP.bat
+
+SETUP verifies uv and downloads an exact CPython from its checksum-pinned
+catalog. It locks package versions with uv, downloads matching wheel
+candidates and verifies their locked SHA-256 hashes. It then tests an
+offline install with an empty cache and a throwaway venv. No app is run.
+Only a successful preparation produces bundle/. Temporary files are
+under the starter folder, not Windows Temp, and are removed when it exits.
+
+ZIP only the CONTENTS of bundle/, not the starter, work files or caches.
+For example, in PowerShell from the starter root (choose a new ZIP name):
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    [IO.Compression.ZipFile]::CreateFromDirectory(
+        (Join-Path $PWD.Path 'bundle'), (Join-Path $PWD.Path 'prepared-app.zip'))
+    Get-FileHash .\prepared-app.zip -Algorithm SHA256
+
+Share the archive hash over a trusted channel and verify it before using
+the ZIP. Internal hashes detect corruption, not a maliciously replaced
+manifest or launcher. Review all app files for secrets before shipping.
+
+2. OFFLINE TARGET MACHINE
+
+Copy the prepared ZIP locally, verify its SHA-256, then extract it into a
+fresh directory on a local fixed drive. Double-click START.bat. No network
+access is needed or used by the launcher: uv runs with --offline,
+--no-config, --no-python-downloads and --no-index during wheel sync.
+It verifies payload files on first start, creates .venv from runtime/ at
+the extraction path, and installs exactly from the bundled hashed plan.
+It then runs the app. Later starts check the interpreter and skip setup.
+
+Do not transfer a .venv or move the initialized folder. Move the ZIP or
+unstarted bundle instead. If the configuration or app payload needs to
+change, make a fresh bundle online. After failed setup, re-extract the
+prepared ZIP into a new local folder and diagnose the reported error.
+An arbitrary folder name is fine within normal Windows path limits;
+no network shares, junctions, or symlinks. START exit: 0 success,
+10 environment failure, 20 application failure, 30 wrapper failure.
+
+WHAT IS IN THE PREPARED FOLDER
+
+START.bat and two PowerShell files: offline initialization/launch.
+application/: your code and static data.
+uv.exe, runtime/, wheelhouse/: the third-party binaries and wheels.
+pyproject.toml, uv.lock: chosen settings and resolved dependency record.
+install-plan.txt: uv-exported hashed installation input, not a second lock.
+bundle-manifest.json: relative paths and checksums of shipped files.
+provenance.json, LICENSE, THIRD_PARTY.md, licenses/: origins and notices.
+.venv/ and .portable-python/ are created only by START; never zip them.
+
+SETUP DOWNLOADS (NOT ACCESSED BY START)
+
+https://releases.astral.sh/github/uv/releases/download/0.13.6/uv-x86_64-pc-windows-msvc.zip
+https://releases.astral.sh/github/python-build-standalone/releases/download/20261026/cpython-3.13.18%2B20261026-x86_64-pc-windows-msvc-install_only_stripped.tar.gz
+https://pypi.org/simple/ and https://files.pythonhosted.org/packages/...
+https://raw.githubusercontent.com/astral-sh/uv/0.13.6/LICENSE-MIT
+https://raw.githubusercontent.com/astral-sh/uv/0.13.6/LICENSE-APACHE
+
+Exact artifact URLs appear during SETUP and in provenance.json / uv.lock.
+TLS verification stays enabled; allow official HTTPS redirect/CDN endpoints
+on the online machine. No fixed IPs. Online resolution is a trust decision.
+Wheels can execute code. The venv is not a sandbox; keep target networking
+blocked by host policy if your app or libraries must never access it.
+Python and wheel notices remain with the shipped bytes. Review the licenses
+and any additional redistribution obligations before distributing a bundle.

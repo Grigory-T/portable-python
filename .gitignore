@@ -11,3 +11,5 @@ uv.lock
 .env
 .env.*
 !.env.example
+/preloaded/bundle/
+/preloaded/.prepare-*/
