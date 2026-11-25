@@ -33,13 +33,28 @@ The ZIPs contain readable text source, not an opaque installer or executable.
 1. **Packaging machine:** Extract the starter. Put your code under
    `application/` with `__init__.py` and `__main__.py`. Edit `pyproject.toml`
    and add any needed project folders. Optionally include a trusted `uv.lock`
-   from an earlier target with matching TOML.
+   generated on a developer machine or saved from an earlier target.
 2. **Packaging machine:** ZIP the contents with `START.bat` at the top level.
-   No Python, uv, downloads, or application/launcher execution is required.
+   Packaging itself needs no Python, uv, or application/launcher execution.
    Do not include `.venv/`, `.portable-python/`, or caches.
 3. **Online Windows target:** Transfer and extract locally, then run
    **START.bat**. It downloads the runtime and wheels, creates `.venv`,
    and runs your app. Later unchanged starts need no setup downloads.
+
+**Optional: generate the lock on the developer machine.** With uv 0.13.10
+and a compatible Python already available, run this beside the final
+`pyproject.toml` (replace the Python version if you changed the pin):
+
+```powershell
+uv --no-config --no-python-downloads lock --python 3.15.2 --no-build --no-sources --default-index https://pypi.org/simple
+```
+
+This resolves dependency metadata and writes `uv.lock` without creating the
+target environment or running the app. Ship the lock beside the matching TOML,
+not a venv or package cache. On the target, START uses a supplied lock unchanged
+with `uv sync --locked` and fails if uv reports it stale or invalid. If the
+lock is absent, START creates it on the target before syncing. The target
+downloads and installs its own runtime and wheels in both cases.
 
 ### Preloaded: online setup machine → offline target
 

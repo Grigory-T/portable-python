@@ -92,9 +92,10 @@ dependencies. References: [JupyterLab](https://pypi.org/project/jupyterlab/4.6.4
 [ipykernel](https://pypi.org/project/ipykernel/7.4.0/).
 
 `uv lock` obtains metadata and writes exact versions, conditions, artifact URLs
-and hashes to the target's `uv.lock`. One-Launcher runs it only when no lock is
-supplied; with an existing lock it either installs from it unchanged or fails.
-The launcher checks approved HTTPS origins
+and hashes to `uv.lock`. A One-Launcher developer can optionally create the
+lock and ship it as text alongside the matching TOML. Otherwise START resolves
+on the target. START never regenerates an existing lock; it either installs
+from it unchanged or fails. The launcher checks approved HTTPS origins
 before `uv sync --locked --no-build`; uv verifies wheel hashes. No persistent
 requirements.lock/export step is needed. Generated lock entries can include
 other-platform wheels/source archive metadata; source builds are not allowed.

@@ -47,7 +47,7 @@ Application checks: fresh setup/run, empty-library default, Unicode path,
 unchanged start, actual START.bat, nested absolute/relative imports, original
 app exit code, configuration-drift refusal, neutral journal, and a fresh install
 of pinned data/Excel libraries with real Polars and Calamine operations. It
-replays a supplied lock, checks stale-lock refusal and verifies that a rebuild
+replays a developer-generated lock, checks stale-lock refusal and verifies that a rebuild
 leaves the lock byte-identical. With `-BlockNetwork` on an ephemeral CI runner,
 the final start runs with outbound traffic blocked for the test uv and Python
 executables. The test removes its rules and workspace.

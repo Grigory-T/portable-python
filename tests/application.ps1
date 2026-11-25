@@ -119,8 +119,30 @@ if ($Audit) {
     if ($LASTEXITCODE -ne 0) { throw 'Advisory check failed' }
 }
 
-# Model repackaging only text/application files and the lock from a prior target.
-$sourceLock = Join-Path $root 'uv.lock'
+# Optional developer lock: use an already installed uv/Python without running
+# START or the app in the developer folder. Only TOML and the lock are shipped.
+$developer = [IO.Directory]::CreateDirectory((Join-Path $testRoot 'developer')).FullName
+[IO.File]::WriteAllText((Join-Path $developer 'pyproject.toml'), $text, $utf8)
+$developerUv = Join-Path $root '.portable-python\uv.exe'
+$developerPython = Join-Path $root '.portable-python\python\cpython-3.15.2-windows-x86_64-none\python.exe'
+$developerCache = Join-Path $testRoot 'developer-cache'
+$originalIndex = $env:UV_INDEX
+$originalCertFile = $env:SSL_CERT_FILE
+$originalCertDir = $env:SSL_CERT_DIR
+try {
+    $env:UV_INDEX = $null
+    $env:SSL_CERT_FILE = $null
+    $env:SSL_CERT_DIR = $null
+    & $developerUv --no-config --no-python-downloads --system-certs --cache-dir $developerCache lock --project $developer --python $developerPython --no-build --no-sources --default-index https://pypi.org/simple
+    if ($LASTEXITCODE -ne 0 -or (Test-Path -LiteralPath (Join-Path $developer '.venv'))) {
+        throw 'Developer lock must resolve successfully without creating a project venv.'
+    }
+} finally {
+    $env:UV_INDEX = $originalIndex
+    $env:SSL_CERT_FILE = $originalCertFile
+    $env:SSL_CERT_DIR = $originalCertDir
+}
+$sourceLock = Join-Path $developer 'uv.lock'
 $expectedHash = (Get-FileHash -LiteralPath $sourceLock).Hash
 $root = Join-Path $testRoot 'locked-replay'
 [System.IO.Compression.ZipFile]::ExtractToDirectory((Get-Item -LiteralPath $Zip).FullName, $root)
