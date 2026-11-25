@@ -4,6 +4,7 @@ import hashlib
 import json
 from pathlib import Path
 import re
+import shutil
 import sys
 import tomllib
 from urllib.parse import unquote, urlsplit
