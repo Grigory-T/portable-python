@@ -122,8 +122,10 @@ security/license review.
 
 The online profiles resolve on the target. Preloaded resolves on a dedicated
 online machine and transfers verified runtime files, wheel hashes and the
-locked graph. The manifest checks transfer integrity on first start, not
-authenticity against a replaced launcher/manifest. Verify the prepared archive
+locked graph. The manifest checks environment payload integrity on first
+start or rebuild, not authenticity against a replaced launcher/manifest.
+The app is supplied locally and editable; it is outside the manifest and
+runs with the user's permissions. Verify the prepared archive
 hash from a trusted channel. A trusted saved lock is checked as-is during
 Preloaded preparation; a stale lock fails, rather than silently re-resolving.
 On first resolution, TLS and the existing Windows trust store still protect
@@ -136,8 +138,8 @@ CI additionally checks its installed package versions against OSV; failure or
 service unavailability is not called clean. This check is not run by START and
 does not certify any later/user-modified graph.
 
-The initial public release used uv **0.13.1**. Current v0.1.4 pins **0.13.6**
-and refuses older versions. Versions 0.12.7 through 0.12.17 had a Windows
+The initial public release used uv **0.13.1**. The online v0.1.4
+profiles pin **0.13.6**. Versions 0.12.7 through 0.12.17 had a Windows
 wheel-extraction vulnerability. See
 [GHSA-2cv4-cqwr-gwf7](https://github.com/astral-sh/uv/security/advisories/GHSA-2cv4-cqwr-gwf7).
 uv 0.13.4 also removes the compromised emSign CA from its bundled set; see
@@ -145,13 +147,18 @@ uv 0.13.4 also removes the compromised emSign CA from its bundled set; see
 These launchers use Windows system trust, which must independently be updated.
 JupyterLab is pinned to **4.6.4**, which fixes the 4.6.3 advisory set; see the
 [upstream security page](https://github.com/jupyterlab/jupyterlab/security).
-CPython **3.13.18** is the selected security patch release. It adds distrust of
+CPython **3.13.18** is the online profiles' selected security patch. It adds distrust of
 compromised eMudhra intermediate keys in ssl and further security fixes; see the
 [official release](https://www.python.org/downloads/release/python-31318/).
 uv 0.13.6 includes the updated managed-Python catalog and the earlier uv 0.13.5
 certificate-chain rejection fix. The 3.13 line is security-only, not an LTS
 promise or a guarantee that an exact patch remains safe indefinitely. Review
 future security patches and retest rather than indefinitely freezing these pins.
+
+Preloaded v0.1.5 pins [CPython 3.15.2](https://www.python.org/downloads/release/python-3152/)
+and [uv 0.13.10](https://github.com/astral-sh/uv/releases/tag/0.13.10), which
+includes the updated managed build and a
+[wheel validation security fix](https://github.com/astral-sh/uv/security/advisories/GHSA-vjvj-3m3f-fgmm).
 
 Before updating pins: inspect upstream advisories/licenses, independently check
 published artifact checksums, inspect the uv catalog, test compatible Windows

@@ -109,17 +109,21 @@ uv and Python on the ephemeral test runner. It checks native and pure-Python
 imports, repeat start, isolation, missing package metadata, offline rebuild,
 automatic `data/` creation, user-data preservation, concurrent SETUP rejection,
 absence of a persistent cache, damaged-wheel rejection and app exit status.
+The transfer ZIP must omit app code. The test adds it on the target, then
+edits and reruns it without reinstalling and verifies it survives recovery.
+SETUP is exercised at the 125-character root limit; both launchers reject
+longer roots before writing state.
 The test removes its rules and owned workspaces.
 It also rejects a wrong download pin without producing a bundle, validates
 the artifact receipts, and prepares the same payload twice using a retained
 lock on the second run. The manifest and generated ZIP must match without
-resolving again. Windows ZIP extraction also verifies a Unicode member name.
+resolving again.
 This is Windows Server CI, not a clean, disconnected Windows 11 desktop
 acceptance test. The product never changes firewall rules.
 
 `tests/library-pins.json` contains an exact compatibility sample, not
 production defaults. Preloaded exercises Polars (Windows stable ABI), Calamine
-(CPython 3.13 wheel), and an in-memory Excel write/read round-trip. JupyterLab
+0.9.1 (native CPython 3.15 x64 wheel), and an in-memory Excel write/read round-trip. JupyterLab
 checks the notebook pins and psutil in the live kernel. The existing
 stdlib-only and default notebook setups are still tested first.
 

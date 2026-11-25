@@ -13,7 +13,14 @@ from zipfile import ZIP_DEFLATED, ZipFile, ZipInfo
 
 
 def read_toml(path):
-    return tomllib.loads(path.read_text(encoding="utf-8"))
+    try:
+        return tomllib.loads(path.read_text(encoding="utf-8"))
+    except UnicodeDecodeError:
+        raise SystemExit(f"{path.name}: save the file as UTF-8 without a BOM.") from None
+    except tomllib.TOMLDecodeError as exc:
+        raise SystemExit(
+            f"{path.name}: {exc}. Use UTF-8 without a BOM and quote dependency strings."
+        ) from None
 
 
 def validate_project(path, python, uv):
@@ -130,7 +137,7 @@ def write_manifest(bundle, inventory):
                 files[path.relative_to(bundle).as_posix()] = hashlib.file_digest(stream, "sha256").hexdigest()
     (bundle / "bundle-manifest.json").write_text(
         json.dumps({
-            "schema": 2,
+            "schema": 3,
             "installed_packages": Path(inventory).read_text(encoding="utf-8").splitlines(),
             "sha256": files,
         }, indent=2, ensure_ascii=True) + "\n", encoding="utf-8"

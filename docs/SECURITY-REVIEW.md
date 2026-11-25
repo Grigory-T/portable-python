@@ -110,14 +110,18 @@ review, not a certification, penetration test or guarantee of harmless dependenc
 ## Release and assurance limits
 
 The repository now enables immutable future releases on GitHub; publish drafts
-only after both assets are attached and verified. GitHub's release attestation shares the
+only after all assets are attached and verified. GitHub's release attestation shares the
 GitHub trust anchor: it is not an independent author signature. Historical v0.1.0
 is not retroactively made immutable by enabling the setting. Never replace
 security-release bytes under an old version number.
 
-Keep only the latest two generic delivery ZIPs in the active handoff. Users
+Keep only the latest ZIP for each of the three generic profiles in the active handoff. Users
 upgrade into a fresh local folder and copy reviewed app/notebook data only.
 Do not carry old venv/config/cache/readiness state into the new release.
+
+Preloaded's current, separately reviewed pins are documented in
+[downloads and provenance](DOWNLOADS.md). Its application is supplied by the
+offline user and is outside the environment manifest.
 
 No evidence of malicious launcher behavior was found in this inspection. That
 is not a numerical risk rating or proof of no vulnerabilities. The trust model

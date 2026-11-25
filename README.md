@@ -22,7 +22,7 @@ can take several minutes; unchanged later starts skip package setup.
 |---|---|---|
 | `portable-python-one-launcher-0.1.4-windows-x86_64.zip` | Ordinary Python application | `application/`; entry point `__main__.py` |
 | `portable-python-jupyterlab-0.1.4-windows-x86_64.zip` | Interactive notebooks | `notebooks/`; create or copy `.ipynb` files |
-| `portable-python-preloaded-0.1.4-windows-x86_64.zip` | Prepare a self-contained application bundle for offline targets | `application/`; entry point `__main__.py` |
+| `portable-python-preloaded-0.1.5-windows-x86_64.zip` | Prepare a self-contained Python environment for an offline target | `application/` on the offline machine |
 
 The online editions are usable immediately. The application examples use only the standard
 library. The notebook example checks its actual interpreter and directory.
@@ -30,15 +30,18 @@ The ZIPs contain readable text source, not an opaque installer or executable.
 
 ### Preloaded: online setup machine → offline target
 
-1. **Online Windows machine:** Extract the Preloaded starter ZIP. Edit
-   `pyproject.toml` and `application/`, then run **SETUP.bat**.
+1. **Online Windows machine:** Extract the starter into a short local path.
+   Edit `pyproject.toml` and run **SETUP.bat**. No application code is needed.
 2. **Online Windows machine:** Take the generated `prepared-app.zip` and its
    SHA-256 from the console or `setup.log`. The flat ZIP contains verified uv,
-   CPython, wheels and a hashed install plan; no `.venv` or setup cache.
+   CPython, wheels and a hashed install plan; no application, `.venv` or setup cache.
 3. **Offline Windows machine:** Verify the ZIP hash, extract into a fresh
-   local folder, and run **START.bat**. It creates a local `.venv` from the
+   short local folder, add your app under `application/` with `__init__.py`
+   and `__main__.py`, and run **START.bat**. It creates a local `.venv` from the
    bundled runtime, installs wheels without network, and runs the app.
    Later starts check the installed package inventory and skip installation.
+   Edit code under `application/` and run START again; changing Python or
+   dependencies still requires a fresh environment ZIP from SETUP.
    If the environment is damaged, move only `.venv` outside the bundle and
    run START to rebuild it offline. Keep the target network blocked by policy
    if the application itself must not contact the network.
@@ -72,16 +75,16 @@ See [environment details and limitations](docs/ENVIRONMENT.md).
 
 ## Python and libraries
 
-Default pins: **CPython 3.13.18**, **uv 0.13.6**; the notebook edition adds
-**JupyterLab 4.6.4** and **ipykernel 7.4.0**. The user-library list is empty.
+The online editions pin **CPython 3.13.18** and **uv 0.13.6**. The notebook
+edition adds **JupyterLab 4.6.4** and **ipykernel 7.4.0**. Preloaded pins
+**CPython 3.15.2** and **uv 0.13.10**. User-library lists start empty.
 These are deliberately selected/tested pins, not an auto-update mechanism.
 
-Version policy: keep the mature Python 3.13 line while it remains suitable and
-security-supported; review security patch releases rather than freezing a patch
-forever. The current baseline is uv 0.13.6 + CPython 3.13.18, including upstream
-certificate-security fixes. Neither pin is an LTS guarantee or proof of zero
-vulnerabilities. Future changes require official checksum verification and all
-Windows acceptance suites. Do not self-update the pinned project-local uv.
+The online profiles stay on the mature 3.13 line. Preloaded uses the stable
+[Python 3.15.2 security release](https://www.python.org/downloads/release/python-3152/);
+verify that your native packages have compatible Windows x64 wheels.
+Review future security patches and rerun acceptance tests rather than
+freezing a patch indefinitely. Do not self-update the pinned project-local uv.
 See the [version review](docs/SECURITY-REVIEW.md).
 
 Before first start, edit the supplied `pyproject.toml`, retaining its metadata:

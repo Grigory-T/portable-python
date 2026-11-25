@@ -4,7 +4,7 @@ The online profiles download on the target. Preloaded downloads on the setup
 machine only; the offline target consumes its prepared bundle. Release starter
 ZIPs contain only this project's text source, examples and license notices.
 
-## uv 0.13.6
+## Online profiles: uv 0.13.6
 
 Automatic bootstrap URL:
 
@@ -34,7 +34,7 @@ the executable hash was independently computed from the verified ZIP. The hashes
 are in each TOML and the release builder. Runtime does not trust a newly
 downloaded checksum beside an arbitrary archive.
 
-## CPython 3.13.18
+## Online profiles: CPython 3.13.18
 
 The default exact Windows x86-64 distribution in the pinned uv catalog is:
 
@@ -111,6 +111,26 @@ make their own requests. The launcher is not a network sandbox.
 
 ### Preloaded preparation
 
+Preloaded pins **uv 0.13.10** and **CPython 3.15.2** (Windows x64, build
+20261124). Its default download URLs and SHA-256 values are:
+
+```text
+https://releases.astral.sh/github/uv/releases/download/0.13.10/uv-x86_64-pc-windows-msvc.zip
+297b3881fe1adfb922becc2c1613202abb41dc83ea5ff43d472aa087ca1f8683
+
+https://releases.astral.sh/github/python-build-standalone/releases/download/20261124/cpython-3.15.2%2B20261124-x86_64-pc-windows-msvc-install_only_stripped.tar.gz
+547cdbb844edc425b235513fdf0267f64e8e59c8f484527bb7ef92d3aad91dd9
+
+https://raw.githubusercontent.com/astral-sh/uv/0.13.10/LICENSE-MIT
+860e3d7a86b84e6a7012c7a635fc64df475cebc6cce34dfeb73a5982ec58176c
+
+https://raw.githubusercontent.com/astral-sh/uv/0.13.10/LICENSE-APACHE
+c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4
+
+Extracted uv.exe
+9f9f3631112f847c81b2063637ce01f4dd8d65e8ac2a8f4bb1c121f7effa5c76
+```
+
 SETUP downloads the uv archive, the two official license files and the
 exact CPython archive selected by uv's catalog. The PowerShell client uses
 TLS verification and checks every redirect against the HTTPS allowlist:
@@ -133,8 +153,8 @@ attestations during pin review. Maintainers may repeat the checks on downloaded
 archives; no GitHub CLI or signing key is required on the setup/target machine:
 
 ```text
-gh release verify-asset 0.13.6 uv-x86_64-pc-windows-msvc.zip -R astral-sh/uv
-gh release verify-asset 20261026 cpython-3.13.18+20261026-x86_64-pc-windows-msvc-install_only_stripped.tar.gz -R astral-sh/python-build-standalone
+gh release verify-asset 0.13.10 uv-x86_64-pc-windows-msvc.zip -R astral-sh/uv
+gh release verify-asset 20261124 cpython-3.15.2+20261124-x86_64-pc-windows-msvc-install_only_stripped.tar.gz -R astral-sh/python-build-standalone
 ```
 
 These are archive attestations, not a claim that each executable or wheel is

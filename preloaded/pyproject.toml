@@ -1,23 +1,23 @@
 [project]
 name = "portable-python-preloaded"
-version = "0.1.4"
-description = "Windows application prepared online and installed offline"
+version = "0.1.5"
+description = "Windows Python environment prepared online for an offline application"
 # Select a supported exact CPython build in the selected uv release's catalog.
-requires-python = "==3.13.18"
+requires-python = "==3.15.2"
 # Use ordinary PyPI names, optionally with a pin, range, extras or marker.
 dependencies = []
 
 [tool.uv]
 package = false
-required-version = "==0.13.6"
+required-version = "==0.13.10"
 
 [tool.portable-python]
-uv-archive-sha256 = "a2a8820d5eea32f08ef467ef3b7f66883a9b076d5737a2fc2fbb5f458d1bb50f"
-uv-exe-sha256 = "81ea623608f8c17720c62efd0a380a8ead380c4d365ba6968e9d279a2319c674"
+uv-archive-sha256 = "297b3881fe1adfb922becc2c1613202abb41dc83ea5ff43d472aa087ca1f8683"
+uv-exe-sha256 = "9f9f3631112f847c81b2063637ce01f4dd8d65e8ac2a8f4bb1c121f7effa5c76"
 uv-license-mit-sha256 = "860e3d7a86b84e6a7012c7a635fc64df475cebc6cce34dfeb73a5982ec58176c"
 uv-license-apache-sha256 = "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4"
 # Exact Windows x64 archive selected by this uv catalog, not a python.org installer.
-python-archive-sha256 = "7369f7a35f261222a6ac8b3a87c1c88eeebee8af945d85346202591a64038dd3"
+python-archive-sha256 = "547cdbb844edc425b235513fdf0267f64e8e59c8f484527bb7ef92d3aad91dd9"
 
 [[tool.uv.index]]
 name = "pypi"

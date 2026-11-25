@@ -26,7 +26,7 @@ PROFILES = {
         "portable-python-preloaded",
         ["SETUP.bat", "START.bat", "prepare.ps1", "prepare.py",
          "portable-python.ps1", "portable-common.ps1", "pyproject.toml", "README.txt",
-         "application/__init__.py", "application/__main__.py"],
+         "THIRD_PARTY.md"],
     ),
 }
 UV_VERSION = "0.13.6"
@@ -41,10 +41,11 @@ def check_profile(name, files):
         raise ValueError(f"Unexpected or linked source files in {name}: {actual ^ set(files)}")
     metadata = tomllib.loads((source / "pyproject.toml").read_text(encoding="utf-8"))
     project = metadata["project"]
-    assert project["version"] == "0.1.4"
-    assert project["requires-python"] == "==3.13.18"
+    preloaded = name == "preloaded"
+    assert project["version"] == ("0.1.5" if preloaded else "0.1.4")
+    assert project["requires-python"] == ("==3.15.2" if preloaded else "==3.13.18")
     assert project["dependencies"] == []
-    assert metadata["tool"]["uv"]["required-version"] == f"=={UV_VERSION}"
+    assert metadata["tool"]["uv"]["required-version"] == ("==0.13.10" if preloaded else f"=={UV_VERSION}")
     assert metadata["tool"]["uv"]["package"] is False
     assert metadata["tool"]["uv"]["index"] == [
         {"name": "pypi", "url": "https://pypi.org/simple", "default": True}
@@ -53,11 +54,13 @@ def check_profile(name, files):
         "uv-archive-sha256": UV_ARCHIVE_SHA256,
         "uv-exe-sha256": UV_EXE_SHA256,
     }
-    if name == "preloaded":
+    if preloaded:
         expected_pins |= {
+            "uv-archive-sha256": "297b3881fe1adfb922becc2c1613202abb41dc83ea5ff43d472aa087ca1f8683",
+            "uv-exe-sha256": "9f9f3631112f847c81b2063637ce01f4dd8d65e8ac2a8f4bb1c121f7effa5c76",
             "uv-license-mit-sha256": "860e3d7a86b84e6a7012c7a635fc64df475cebc6cce34dfeb73a5982ec58176c",
             "uv-license-apache-sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
-            "python-archive-sha256": "7369f7a35f261222a6ac8b3a87c1c88eeebee8af945d85346202591a64038dd3",
+            "python-archive-sha256": "547cdbb844edc425b235513fdf0267f64e8e59c8f484527bb7ef92d3aad91dd9",
         }
     assert metadata["tool"]["portable-python"] == expected_pins
     if name == "jupyterlab":
@@ -105,7 +108,9 @@ def build(profile, output):
     output.mkdir(parents=True, exist_ok=True)
     destination = output / f"{prefix}-{version}-windows-x86_64.zip"
     entries = [(name, ROOT / profile / name) for name in files]
-    entries += [(name, ROOT / name) for name in ("LICENSE", "THIRD_PARTY.md")]
+    entries.append(("LICENSE", ROOT / "LICENSE"))
+    if profile != "preloaded":
+        entries.append(("THIRD_PARTY.md", ROOT / "THIRD_PARTY.md"))
     with zipfile.ZipFile(destination, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=9) as archive:
         for name, path in entries:
             assert not name.startswith("/") and ".." not in Path(name).parts

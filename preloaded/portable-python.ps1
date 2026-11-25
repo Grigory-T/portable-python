@@ -12,6 +12,7 @@ $runtime = Join-Path $Root 'runtime\python.exe'
 $manifest = Join-Path $Root 'bundle-manifest.json'
 $project = Join-Path $Root 'pyproject.toml'
 $ready = Join-Path $state 'ready.state'
+$app = Join-Path $Root 'application'
 $data = Join-Path $Root 'data'
 $lock = $null
 $code = 10
@@ -22,7 +23,7 @@ function Verify-Bundle($record) {
     $payload = foreach ($item in (Get-ChildItem -LiteralPath $Root -Force)) {
         if ($item.FullName -eq $state) { continue }
         Assert-NotLinked $item
-        if ($item.PSIsContainer -and $item.Name -eq 'data') { continue }
+        if ($item.PSIsContainer -and $item.Name -in @('application', 'data')) { continue }
         if ($item.PSIsContainer) { Get-TreeFiles $item.FullName } else { $item }
     }
     $payload | ForEach-Object {
@@ -43,9 +44,9 @@ try {
     [Console]::OutputEncoding = $Utf8
     Assert-LocalWindows $Root
     if (-not [IO.File]::Exists($manifest)) {
-        throw 'No prepared bundle found. On the online setup machine, first run SETUP.bat and ZIP only bundle contents.'
+        throw 'No prepared bundle found. On the online setup machine, run SETUP.bat and transfer the generated prepared-app.zip.'
     }
-    foreach ($path in @($state, $venv, $ready, $data, $manifest, $runtime, $project, (Join-Path $Root 'runtime'), (Join-Path $Root 'application'))) {
+    foreach ($path in @($state, $venv, $ready, $data, $manifest, $runtime, $project, (Join-Path $Root 'runtime'))) {
         if (Test-Path -LiteralPath $path) { Assert-NotLinked (Get-Item -LiteralPath $path -Force) }
     }
     # Allow concurrent-start rejection without writing into the payload. The
@@ -55,7 +56,7 @@ try {
     $lock = Open-WorkspaceLock (Join-Path $state 'workspace.lock')
     $pins = Read-Pins $project
     $record = [IO.File]::ReadAllText($manifest, $Utf8) | ConvertFrom-Json
-    if ($record.schema -ne 2) { throw 'Unsupported bundle manifest.' }
+    if ($record.schema -ne 3) { throw 'Unsupported bundle manifest.' }
     $fingerprint = @($Root, (Get-Hash $manifest), (Get-Hash $project)) -join "`n"
     Set-Location -LiteralPath $Root
     Write-Host "PORTABLE PYTHON (OFFLINE): CPython $($pins['requires-python']), uv $($pins['required-version'])"
@@ -89,7 +90,7 @@ try {
         throw "$($_.Exception.Message) $recovery"
     }
     if ($setup -eq 'PERFORMED') { [IO.File]::WriteAllText($ready, $fingerprint, $Utf8) }
-    # The payload is immutable; applications get a writable data root.
+    # The environment payload is immutable; application/ and data/ are local.
     Assert-NotLinked ([IO.Directory]::CreateDirectory($data))
     Write-Host 'PORTABLE PYTHON STATUS: READY'
     Write-Host "Setup: $setup"
@@ -97,6 +98,14 @@ try {
     Write-Host 'Sources and hashes: provenance.json'
 
     $code = 20
+    Assert-NotLinked ([IO.Directory]::CreateDirectory($app))
+    foreach ($name in @('__main__.py', '__init__.py')) {
+        $file = Join-Path $app $name
+        if (-not [IO.File]::Exists($file)) {
+            throw "Add application\$name and run START.bat again. The offline Python environment is ready."
+        }
+        Assert-NotLinked (Get-Item -LiteralPath $file -Force)
+    }
     $child = Invoke-Native 'application' $python @('-u', '-E', '-s', '-B', '-X', 'utf8', '-m', 'application')
     Write-Host "Application exit code: $child"
     if ($child -eq 0) {

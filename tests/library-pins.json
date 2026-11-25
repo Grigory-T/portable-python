@@ -7,6 +7,9 @@
     "xlrd": "2.0.2",
     "more-itertools": "11.2.1"
   },
+  "preloaded": {
+    "python-calamine": "0.9.1"
+  },
   "notebook": {
     "jupyterlab": "4.6.4",
     "ipykernel": "7.4.0",

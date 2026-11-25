@@ -9,6 +9,11 @@ function Assert-LocalWindows([string]$Path) {
         -not [Environment]::Is64BitProcess -or $env:PROCESSOR_ARCHITECTURE -ne 'AMD64') {
         throw 'Use 64-bit Windows PowerShell on Windows 11 x86-64.'
     }
+    # Leave room for legacy PowerShell/.NET and Windows ZIP tools. Native
+    # packages can still have deeply nested paths: prefer a short drive path.
+    if ($Path.Length -gt 125) {
+        throw 'Folder path is too long for reliable setup. Extract into a short local path (125 characters maximum), e.g. C:\apps\portable.'
+    }
     $drive = [IO.DriveInfo]::new([IO.Path]::GetPathRoot($Path))
     if ($drive.DriveType -ne [IO.DriveType]::Fixed) { throw 'Use a local fixed-drive folder.' }
     $parent = Get-Item -LiteralPath $Path -Force
@@ -50,7 +55,7 @@ function Read-Pins([string]$Path) {
     $text = [IO.File]::ReadAllText($Path, $Utf8)
     $pins = @{}
     foreach ($entry in @(
-        @('project', 'requires-python', '==(?<value>3\.(?:11|12|13|14)\.\d+)'),
+        @('project', 'requires-python', '==(?<value>3\.(?:11|12|13|14|15)\.\d+)'),
         @('tool.uv', 'required-version', '==(?<value>\d+\.\d+\.\d+)'),
         @('tool.portable-python', 'uv-archive-sha256', '(?<value>[0-9a-fA-F]{64})'),
         @('tool.portable-python', 'uv-exe-sha256', '(?<value>[0-9a-fA-F]{64})'),
@@ -65,8 +70,8 @@ function Read-Pins([string]$Path) {
         if ($matched.Count -ne 1) { throw "Invalid exact $section.$key pin in pyproject.toml." }
         $pins[$key] = $matched[0].Groups['value'].Value.ToLowerInvariant()
     }
-    if ([version]$pins['required-version'] -lt [version]'0.13.6') {
-        throw 'uv must be at least 0.13.6.'
+    if ([version]$pins['required-version'] -lt [version]'0.13.10') {
+        throw 'uv must be at least 0.13.10.'
     }
     return $pins
 }

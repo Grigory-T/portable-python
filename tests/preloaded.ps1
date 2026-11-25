@@ -28,21 +28,12 @@ function Invoke-Target([string]$Root, [int]$Expected) {
     return $text
 }
 
-function New-PreparedTestZip([string]$Scenario) {
-        $source = Join-Path $testRoot "$scenario online"
-        [IO.Compression.ZipFile]::ExtractToDirectory($starterZip, $source)
-        [IO.File]::WriteAllText((Join-Path (Join-Path $source 'application') $unicodeFixture), 'archive member', $utf8)
-        if ((Invoke-Target $source 10) -notmatch 'No prepared bundle found') {
-            throw 'START on the starter did not give an actionable error.'
-        }
-        if ($scenario -eq 'wheels') {
-            $project = Join-Path $source 'pyproject.toml'
-            $requirements = @($pins.data.PSObject.Properties | ForEach-Object { "$($_.Name)==$($_.Value)" })
-            $requirements += "colorama==0.4.6; sys_platform == 'win32'"
-            $toml = [IO.File]::ReadAllText($project).Replace('dependencies = []',
-                ('dependencies = ' + (ConvertTo-Json -InputObject $requirements -Compress)))
-            [IO.File]::WriteAllText($project, $toml, $utf8)
-            [IO.File]::WriteAllText((Join-Path $source 'application\__main__.py'), @'
+function Add-OfflineTestApplication([string]$Target, [string]$Scenario) {
+    $app = [IO.Directory]::CreateDirectory((Join-Path $Target 'application')).FullName
+    [IO.File]::WriteAllText((Join-Path $app '__init__.py'), '', $utf8)
+    [IO.File]::WriteAllText((Join-Path $app $unicodeFixture), 'offline application data', $utf8)
+    if ($Scenario -eq 'wheels') {
+        [IO.File]::WriteAllText((Join-Path $Target 'application\__main__.py'), @'
 from pathlib import Path
 from importlib.metadata import version
 from io import BytesIO
@@ -57,7 +48,7 @@ from python_calamine import CalamineWorkbook
 from .nested.probe import value
 from more_itertools import chunked
 assert Path(sys._base_executable).resolve() == Path("runtime/python.exe").resolve()
-assert sys.version_info[:3] == (3, 13, 18)
+assert sys.version_info[:3] == (3, 15, 2)
 for requirement in tomllib.loads(Path('pyproject.toml').read_text(encoding='utf-8'))['project']['dependencies']:
     name, expected = requirement.split(';')[0].strip().split('==')
     assert version(name) == expected, name
@@ -75,10 +66,10 @@ assert list(chunked(range(5), 3)) == [[0, 1, 2], [3, 4]]
 assert value == 42
 print("WHEELS AND NESTED IMPORTS SUCCESS")
 '@, $utf8)
-            [IO.Directory]::CreateDirectory((Join-Path $source 'application\nested')) | Out-Null
-            [IO.File]::WriteAllText((Join-Path $source 'application\nested\probe.py'), 'value = 42', $utf8)
-        } else {
-            [IO.File]::WriteAllText((Join-Path $source 'application\__main__.py'), @'
+        [IO.Directory]::CreateDirectory((Join-Path $Target 'application\nested')) | Out-Null
+        [IO.File]::WriteAllText((Join-Path $Target 'application\nested\probe.py'), 'value = 42', $utf8)
+    } else {
+        [IO.File]::WriteAllText((Join-Path $Target 'application\__main__.py'), @'
 import os
 from pathlib import Path
 import sys
@@ -93,6 +84,31 @@ print(text)
 sys.stderr.write('\n\rUTF8_PROGRESS|' + text + '\n')
 print('STDLIB APPLICATION SUCCESS')
 '@, $utf8)
+    }
+}
+
+function New-PreparedTestZip([string]$Scenario) {
+        $source = Join-Path $testRoot "$scenario online"
+        if ($scenario -eq 'wheels') { $source += 'x' * (125 - $source.Length) }
+        [IO.Compression.ZipFile]::ExtractToDirectory($starterZip, $source)
+        # Ensure the online preparer does not ship even accidentally present code.
+        [IO.Directory]::CreateDirectory((Join-Path $source 'application')) | Out-Null
+        [IO.File]::WriteAllText((Join-Path $source 'application\not-shipped.py'), 'raise SystemExit(1)', $utf8)
+        if ((Invoke-Target $source 10) -notmatch 'No prepared bundle found') {
+            throw 'START on the starter did not give an actionable error.'
+        }
+        if ($scenario -eq 'wheels') {
+            $project = Join-Path $source 'pyproject.toml'
+            $requirements = @($pins.data.PSObject.Properties | ForEach-Object {
+                $override = $pins.preloaded.PSObject.Properties[$_.Name]
+                $version = if ($override) { $override.Value } else { $_.Value }
+                "$($_.Name)==$version"
+            })
+            $requirements += "colorama==0.4.6; sys_platform == 'win32'"
+            $toml = [IO.File]::ReadAllText($project).Replace('dependencies = []',
+                ('dependencies = ' + (ConvertTo-Json -InputObject $requirements -Compress)))
+            [IO.File]::WriteAllText($project, $toml, $utf8)
+        } else {
             $setupLock = [IO.File]::Open((Join-Path $source '.prepare.lock'), 'OpenOrCreate', 'ReadWrite', 'None')
             try {
                 $blocked = & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $source 'prepare.ps1')
@@ -162,7 +178,7 @@ print('STDLIB APPLICATION SUCCESS')
         if ([IO.File]::ReadAllText((Join-Path $source 'setup.log')) -notmatch ('ZIP SHA-256: ' + $zipHash)) {
             throw 'SETUP did not report the actual transfer ZIP hash.'
         }
-        foreach ($forbidden in @('.venv', '.portable-python', '.prepare.lock', 'prepare.ps1', 'prepare.py', 'SETUP.bat', 'setup.log', 'data')) {
+        foreach ($forbidden in @('.venv', '.portable-python', '.prepare.lock', 'prepare.ps1', 'prepare.py', 'SETUP.bat', 'setup.log', 'data', 'application')) {
             if (Test-Path -LiteralPath (Join-Path $bundle $forbidden)) {
                 throw "Prepared bundle includes unshippable content: $forbidden"
             }
@@ -177,6 +193,19 @@ print('STDLIB APPLICATION SUCCESS')
 
 try {
     Add-Type -AssemblyName System.IO.Compression.FileSystem
+    if ($starterZip) {
+        $longRoot = Join-Path $testRoot ('x' * (125 - $testRoot.Length))
+        [IO.Compression.ZipFile]::ExtractToDirectory($starterZip, $longRoot)
+        $longOutput = & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $longRoot 'prepare.ps1')
+        if ($LASTEXITCODE -ne 10 -or ($longOutput -join ' ') -notmatch 'Folder path is too long' -or
+            (Test-Path -LiteralPath (Join-Path $longRoot '.prepare.lock'))) {
+            throw 'SETUP did not reject an over-long path before writing state.'
+        }
+        if ((Invoke-Target $longRoot 10) -notmatch 'Folder path is too long' -or
+            (Test-Path -LiteralPath (Join-Path $longRoot '.portable-python'))) {
+            throw 'START did not reject an over-long path before writing state.'
+        }
+    }
     $scenarios = if ($inputBundle -or $ExportBundle) { @('wheels') } else { @('stdlib', 'wheels') }
     foreach ($scenario in $scenarios) {
         $preparedZip = if ($inputBundle) { $inputBundle } else { New-PreparedTestZip $scenario }
@@ -188,8 +217,8 @@ try {
         $target = Join-Path $testRoot ("$scenario target " + [char]0x00e9 + ' [literal]')
         [IO.Compression.ZipFile]::ExtractToDirectory($preparedZip, $target)
         if (-not [IO.File]::Exists((Join-Path $target 'START.bat')) -or
-            [IO.File]::ReadAllText((Join-Path (Join-Path $target 'application') $unicodeFixture)) -ne 'archive member') {
-            throw 'Transfer ZIP was not flat or Unicode member names did not survive extraction.'
+            (Test-Path -LiteralPath (Join-Path $target 'application'))) {
+            throw 'Transfer ZIP is not flat or contains application code.'
         }
         if ($BlockNetwork) {
             foreach ($exe in @('uv.exe', 'runtime\python.exe', '.venv\Scripts\python.exe')) {
@@ -202,10 +231,23 @@ try {
         $env:UV_INDEX = 'https://invalid.invalid/simple'
         $env:UV_PYTHON_INSTALL_DIR = 'C:\not-the-portable-runtime'
         $env:UV_OFFLINE = 'false'
+        if ($scenario -eq 'stdlib') {
+            $emptyApp = Invoke-Target $target 20
+            if ($emptyApp -notmatch 'Setup: PERFORMED' -or $emptyApp -notmatch 'Add application') {
+                throw 'A missing app did not leave a ready environment and show actionable instructions.'
+            }
+        }
+        Add-OfflineTestApplication $target $scenario
         $first = Invoke-Target $target 0
-        if ($first -notmatch 'Setup: PERFORMED' -or $first -notmatch 'APPLICATION STATUS: SUCCESS') { throw 'Missing first-run success.' }
+        $setup = if ($scenario -eq 'stdlib') { 'SKIPPED' } else { 'PERFORMED' }
+        if ($first -notmatch "Setup: $setup" -or $first -notmatch 'APPLICATION STATUS: SUCCESS') { throw 'Missing first app run success.' }
         if ($scenario -eq 'wheels' -and $first -notmatch 'WHEELS AND NESTED IMPORTS SUCCESS') { throw 'Bundled wheels did not import.' }
-        if ((Invoke-Target $target 0) -notmatch 'Setup: SKIPPED') { throw 'Unchanged run did not skip setup.' }
+        [IO.File]::AppendAllText((Join-Path $target 'application\__main__.py'),
+            "`nprint('OFFLINE EDIT SUCCESS')`n", $utf8)
+        $edited = Invoke-Target $target 0
+        if ($edited -notmatch 'Setup: SKIPPED' -or $edited -notmatch 'OFFLINE EDIT SUCCESS') {
+            throw 'Editing application code required setup or did not run the edited code.'
+        }
         if (-not [IO.Directory]::Exists((Join-Path $target 'data'))) { throw 'START did not create data/.' }
         if (Test-Path -LiteralPath (Join-Path $target '.portable-python\cache')) { throw 'Offline START retained a uv cache.' }
         if ($scenario -eq 'stdlib') {
@@ -237,7 +279,8 @@ try {
             $output = Join-Path $data.FullName 'keep.txt'
             [IO.File]::WriteAllText($output, 'keep', $utf8)
             $recovered = Invoke-Target $target 0
-            if ($recovered -notmatch 'Setup: PERFORMED' -or $recovered -notmatch 'WHEELS AND NESTED IMPORTS SUCCESS' -or
+            if ($recovered -notmatch 'Setup: PERFORMED' -or $recovered -notmatch 'OFFLINE EDIT SUCCESS' -or
+                $recovered -notmatch 'WHEELS AND NESTED IMPORTS SUCCESS' -or
                 [IO.File]::ReadAllText($output) -ne 'keep') { throw 'Offline recovery failed or changed user data.' }
 
             $bad = Join-Path $testRoot 'damaged'

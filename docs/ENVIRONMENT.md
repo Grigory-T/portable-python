@@ -70,7 +70,9 @@ Their wider support is not this project's support promise.
   downloads, notebooks and data require additional disk space. Large data/ML
   packages can greatly increase RAM, storage and download needs.
 - Spaces and Unicode paths are tested; ordinary Windows/tool path-length limits
-  still apply. Prefer short local paths. Cloud-synced/placeholder folders and
+  still apply. Preloaded rejects roots longer than 125 characters before setup
+  or launch; shorter paths leave room for nested wheel contents. The launcher
+  does not enable Windows long-path settings. Cloud-synced/placeholder folders and
   filesystem redirection are not qualified; use an ordinary local folder.
 - Prepared environments contain location-dependent paths. Re-extract/recreate
   at a new location; do not copy a prepared `.venv` as a portable installation.
