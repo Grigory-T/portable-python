@@ -20,13 +20,26 @@ can take several minutes; unchanged later starts skip package setup.
 
 | ZIP | Purpose | Put your code here |
 |---|---|---|
-| `portable-python-one-launcher-0.1.4-windows-x86_64.zip` | Ordinary Python application | `application/`; entry point `__main__.py` |
+| `portable-python-one-launcher-0.1.5-windows-x86_64.zip` | Ordinary Python application | `application/`; entry point `__main__.py` |
 | `portable-python-jupyterlab-0.1.4-windows-x86_64.zip` | Interactive notebooks | `notebooks/`; create or copy `.ipynb` files |
 | `portable-python-preloaded-0.1.6-windows-x86_64.zip` | Prepare a self-contained Python environment for an offline target | `application/` on the offline machine |
 
 The online editions are usable immediately. The application examples use only the standard
 library. The notebook example checks its actual interpreter and directory.
 The ZIPs contain readable text source, not an opaque installer or executable.
+
+### One-Launcher: package without running → install on the target
+
+1. **Packaging machine:** Extract the starter. Put your code under
+   `application/` with `__init__.py` and `__main__.py`. Edit `pyproject.toml`
+   and add any needed project folders. Optionally include a trusted `uv.lock`
+   from an earlier target with matching TOML.
+2. **Packaging machine:** ZIP the contents with `START.bat` at the top level.
+   No Python, uv, downloads, or application/launcher execution is required.
+   Do not include `.venv/`, `.portable-python/`, or caches.
+3. **Online Windows target:** Transfer and extract locally, then run
+   **START.bat**. It downloads the runtime and wheels, creates `.venv`,
+   and runs your app. Later unchanged starts need no setup downloads.
 
 ### Preloaded: online setup machine → offline target
 
@@ -78,12 +91,12 @@ See [environment details and limitations](docs/ENVIRONMENT.md).
 
 ## Python and libraries
 
-The online editions pin **CPython 3.13.18** and **uv 0.13.6**. The notebook
-edition adds **JupyterLab 4.6.4** and **ipykernel 7.4.0**. Preloaded pins
-**CPython 3.15.2** and **uv 0.13.10**. User-library lists start empty.
+One-Launcher and Preloaded both pin **CPython 3.15.2** and **uv 0.13.10**.
+The notebook edition pins **CPython 3.13.18**, **uv 0.13.6**,
+**JupyterLab 4.6.4** and **ipykernel 7.4.0**. User-library lists start empty.
 These are deliberately selected/tested pins, not an auto-update mechanism.
 
-The online profiles stay on the mature 3.13 line. Preloaded uses the stable
+The application profiles use the stable
 [Python 3.15.2 security release](https://www.python.org/downloads/release/python-3152/);
 verify that your native packages have compatible Windows x64 wheels.
 Review future security patches and rerun acceptance tests rather than
@@ -95,9 +108,9 @@ Before first start, edit the supplied `pyproject.toml`, retaining its metadata:
 ```toml
 [project]
 name = "portable-python-one-launcher"
-version = "0.1.4"
+version = "0.1.5"
 description = "General Windows portable Python application"
-requires-python = "==3.13.18"
+requires-python = "==3.15.2"
 dependencies = ["openpyxl", "xlrd", "polars"]
 ```
 
@@ -120,8 +133,10 @@ technical commands. Unavailable Python builds or wheels fail explicitly.
 ## Profile lifecycles
 
 - **Application:** first START prepares, then runs `python -m application`.
-  Later starts only validate/run. For changed Python/library/launcher settings,
-  use a fresh extraction; source code may change independently.
+  Existing lockfiles are reused unchanged; stale locks fail. Later starts only
+  validate/run. For changed Python/library/launcher settings, use a fresh
+  extraction with matching TOML and lock (or no lock); source code may change
+  independently. Move only `.venv` aside to rebuild with the same lock.
 - **JupyterLab:** START prepares if needed, then serves on `127.0.0.1` with
   token authentication. To change libraries, stop server/kernels, edit TOML,
   then START again. Notebooks are retained. Closing the browser does not stop
@@ -160,9 +175,10 @@ terminal font coverage remain separate concerns. See each ZIP's README.
 - Run only trusted application/notebook code and reviewed packages, as a normal
   Windows user, in a private local project folder. Code runs with that user's
   filesystem/network permissions; this is not a sandbox or malware scanner.
-- The online profiles resolve packages live on the target. Preloaded resolves
-  on the setup machine and transfers its lock and wheels. Starter ZIPs do not
-  contain a pre-audited dependency graph.
+- The online profiles resolve packages on the target unless One-Launcher is
+  given a matching lock. Preloaded locks and downloads on the setup machine
+  and transfers a hashed install plan and wheels. Starter ZIPs do not contain
+  a pre-audited dependency graph.
 - Windows 11 AMD64 with 64-bit Windows PowerShell 5.1 is the tested target.
   Linux, macOS, ARM64 and 32-bit Windows are not supported.
 - Run from a local folder, never directly from a network share or ZIP preview.
@@ -188,7 +204,7 @@ terminal font coverage remain separate concerns. See each ZIP's README.
   security/proxy policy is made. See [security policy](SECURITY.md).
 
 See the [review decisions](docs/SECURITY-REVIEW.md) for fixes, accepted tradeoffs
-and the limits of the security claims. Use a fresh extraction for v0.1.4;
+and the limits of the security claims. Use a fresh extraction for a new release;
 do not overwrite an older prepared environment.
 
 ## Source layout and development

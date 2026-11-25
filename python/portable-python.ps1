@@ -9,7 +9,7 @@ $ProgressPreference = "SilentlyContinue"
 Set-StrictMode -Version 2.0
 
 $Mode = if ($SetupOnly) { "Setup" } else { "Start" }
-$ProfileSchema = "application-public-2"
+$ProfileSchema = "application-public-3"
 $UvVersion = "unknown"
 $UvArchiveUrl = ""
 $UvArchiveSha256 = ""
@@ -71,8 +71,8 @@ function Read-BootstrapSettings {
         throw 'tool.uv.required-version must be exactly "==x.y.z".'
     }
     $script:UvVersion = $Matches['version']
-    if ([version]$UvVersion -lt [version]'0.13.6') {
-        throw 'uv must be at least 0.13.6 (reviewed security baseline).'
+    if ([version]$UvVersion -lt [version]'0.13.10') {
+        throw 'uv must be at least 0.13.10 (reviewed security baseline).'
     }
     $script:UvArchiveSha256 = (Get-QuotedSetting "tool.portable-python" "uv-archive-sha256").ToLowerInvariant()
     $script:UvExeSha256 = (Get-QuotedSetting "tool.portable-python" "uv-exe-sha256").ToLowerInvariant()
@@ -291,8 +291,8 @@ function Install-VerifiedUv {
 
 function Get-SelectedPythonVersion {
     $requirement = Get-QuotedSetting "project" "requires-python"
-    if ($requirement -notmatch '^==(?<version>3\.(?:11|12|13|14)\.\d+)$') {
-        throw 'project.requires-python must be exactly "==3.x.y" for CPython 3.11-3.14.'
+    if ($requirement -notmatch '^==(?<version>3\.(?:11|12|13|14|15)\.\d+)$') {
+        throw 'project.requires-python must be exactly "==3.x.y" for CPython 3.11-3.15.'
     }
     return $Matches['version']
 }
@@ -324,11 +324,11 @@ function Confirm-ApprovedLockOrigins([string]$Path) {
     }
 }
 
-function Confirm-PreparedState(
+function Confirm-PreparedConfiguration(
     [string]$PythonVersion,
     [string]$PythonRequest
 ) {
-    foreach ($required in @($LockPath, $VenvPython, $ReadyMarker, $UvExe)) {
+    foreach ($required in @($LockPath, $ReadyMarker, $UvExe)) {
         if (-not (Test-Path -LiteralPath $required -PathType Leaf)) {
             throw "Prepared state is incomplete. Run START.bat in a fresh extracted folder."
         }
@@ -340,6 +340,12 @@ function Confirm-PreparedState(
     }
     if ((Get-Sha256 $UvExe) -ne $UvExeSha256) { throw "Prepared uv.exe failed SHA-256 verification." }
     Confirm-ApprovedLockOrigins $LockPath
+}
+
+function Confirm-PreparedRuntime([string]$PythonVersion, [string]$PythonRequest) {
+    if (-not (Test-Path -LiteralPath $VenvPython -PathType Leaf)) {
+        throw 'The virtual environment is incomplete. Move .venv out of the project and run START again.'
+    }
     $expectedBase = Join-Path $RuntimeRoot "$PythonRequest\python.exe"
     Invoke-Checked "runtime_check" $VenvPython @(
         "-I", "-B", "-X", "utf8", "-c",
@@ -355,7 +361,15 @@ function Initialize-PortablePython(
     Write-Host "Please wait: preparing portable Python, packages, and the local environment..." -ForegroundColor Yellow
     Write-PortableLog "portable-python" "setup_start" "running" "CPython $PythonVersion"
 
-    foreach ($generated in @($VenvRoot, $LockPath, $ReadyMarker)) {
+    $hasLock = Test-Path -LiteralPath $LockPath
+    if ($hasLock) {
+        if (-not (Test-Path -LiteralPath $LockPath -PathType Leaf)) {
+            throw 'uv.lock must be a regular file.'
+        }
+        Confirm-ApprovedLockOrigins $LockPath
+        Write-Host 'Using existing uv.lock; a stale or invalid lock will not be replaced.'
+    }
+    foreach ($generated in @($VenvRoot, $ReadyMarker)) {
         if (Test-Path -LiteralPath $generated) {
             if ([System.IO.Directory]::Exists($generated)) {
                 if ((Get-Item -LiteralPath $generated).Attributes -band [System.IO.FileAttributes]::ReparsePoint) {
@@ -370,19 +384,24 @@ function Initialize-PortablePython(
 
     Install-VerifiedUv
 
-    $catalogJson = & $UvExe --no-config python list $PythonRequest --all-versions --all-platforms --all-arches --only-downloads --show-urls --output-format json
+    $catalogJson = & $UvExe --offline --no-config python list $PythonRequest --all-versions --all-platforms --all-arches --only-downloads --show-urls --output-format json
     if ($LASTEXITCODE -ne 0) {
         throw "uv could not inspect its managed-Python catalog."
     }
     $catalog = @($catalogJson | ConvertFrom-Json)
-    if ($catalog.Count -ne 1) {
+    if ($catalog.Count -ne 1 -or $catalog[0].key -cne $PythonRequest) {
         throw "CPython $PythonVersion is not an exact downloadable Windows x86-64 choice in uv $UvVersion."
     }
     $pythonSource = [Uri][string]$catalog[0].url
     if ($pythonSource.Scheme -ne "https" -or $pythonSource.Host -ne "releases.astral.sh") {
         throw "uv selected an unapproved managed-Python origin: $($pythonSource.AbsoluteUri)"
     }
+    if ($UvVersion -eq '0.13.10' -and $PythonVersion -eq '3.15.2' -and
+        $pythonSource.AbsoluteUri -cne 'https://releases.astral.sh/github/python-build-standalone/releases/download/20261124/cpython-3.15.2%2B20261124-x86_64-pc-windows-msvc-install_only_stripped.tar.gz') {
+        throw 'The pinned uv catalog did not select the reviewed CPython build.'
+    }
     Write-Host "Python source: $($pythonSource.AbsoluteUri)"
+    Write-PortableLog "portable-python" "python_source" "info" $pythonSource.AbsoluteUri
 
     Invoke-Checked "python_install" $UvExe @(
         "--no-config", "--system-certs", "--managed-python",
@@ -449,11 +468,13 @@ print(f"Declared runtime dependencies: {len(dependencies)}")
         $policyPath, $PyprojectPath, $PythonVersion, $UvVersion
     )
 
-    Invoke-Checked "dependency_lock" $UvExe @(
-        "--no-config", "--system-certs", "--managed-python", "--no-python-downloads",
-        "lock", "--project", $Root, "--python", $PythonRequest,
-        "--no-sources", "--no-build", "--default-index", $PyPiIndex
-    )
+    if (-not $hasLock) {
+        Invoke-Checked "dependency_lock" $UvExe @(
+            "--no-config", "--system-certs", "--managed-python", "--no-python-downloads",
+            "lock", "--project", $Root, "--python", $PythonRequest,
+            "--no-sources", "--no-build", "--default-index", $PyPiIndex
+        )
+    }
     if (-not (Test-Path -LiteralPath $LockPath -PathType Leaf)) {
         throw "uv did not create uv.lock."
     }
@@ -485,6 +506,7 @@ print(f"Declared runtime dependencies: {len(dependencies)}")
         Set-Location -LiteralPath $previousLocation
     }
 
+    Confirm-PreparedRuntime $PythonVersion $PythonRequest
     $desiredState = Get-DesiredState $PythonVersion $PythonRequest
     [System.IO.File]::WriteAllText($ReadyMarker, $desiredState + "`r`n", [System.Text.Encoding]::ASCII)
     Write-PortableLog "portable-python" "setup_finish" "success" "CPython $PythonVersion"
@@ -548,14 +570,15 @@ try {
     Write-Host "Package tool: uv $UvVersion"
     Write-Host "Application:  python -m $ApplicationModule"
 
-    if (Test-Path -LiteralPath $ReadyMarker -PathType Leaf) {
+    $wasPrepared = Test-Path -LiteralPath $ReadyMarker -PathType Leaf
+    if ($wasPrepared) { Confirm-PreparedConfiguration $PythonVersion $PythonRequest }
+    if ($wasPrepared -and (Test-Path -LiteralPath $VenvRoot)) {
         $SetupMode = "SKIPPED"
-        Confirm-PreparedState $PythonVersion $PythonRequest
+        Confirm-PreparedRuntime $PythonVersion $PythonRequest
         Write-PortableLog "portable-python" "prepared_state_check" "success" "setup skipped"
     } else {
         $SetupMode = "PERFORMED"
         Initialize-PortablePython $PythonVersion $PythonRequest
-        Confirm-PreparedState $PythonVersion $PythonRequest
     }
     $PortableReady = $true
 

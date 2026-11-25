@@ -4,7 +4,20 @@ The online profiles download on the target. Preloaded downloads on the setup
 machine only; the offline target consumes its prepared bundle. Release starter
 ZIPs contain only this project's text source, examples and license notices.
 
-## Online profiles: uv 0.13.6
+## One-Launcher: uv 0.13.10 and CPython 3.15.2
+
+The application target downloads the same reviewed uv ZIP and CPython build
+as Preloaded (see URLs and SHA-256 values below). It does not download the
+separate redistribution license files. The launcher verifies the ZIP and
+executable against its TOML pins. It checks the exact default build URL from
+the pinned uv catalog, and uv verifies the downloaded CPython archive against
+the catalog's SHA-256. uv can fall back to the official GitHub asset for that
+build on eligible network failures.
+
+- [Pinned uv catalog](https://github.com/astral-sh/uv/blob/0.13.10/crates/uv-python-managed/download-metadata.json)
+- [CPython build 20261124](https://github.com/astral-sh/python-build-standalone/releases/tag/20261124)
+
+## JupyterLab: uv 0.13.6
 
 Automatic bootstrap URL:
 
@@ -31,10 +44,10 @@ Review references, not extra automatic downloads:
 
 The release's GitHub asset digest and downloaded archive checksum were compared;
 the executable hash was independently computed from the verified ZIP. The hashes
-are in each TOML and the release builder. Runtime does not trust a newly
+are in the applicable TOML and the release builder. Runtime does not trust a newly
 downloaded checksum beside an arbitrary archive.
 
-## Online profiles: CPython 3.13.18
+## JupyterLab: CPython 3.13.18
 
 The default exact Windows x86-64 distribution in the pinned uv catalog is:
 
@@ -79,7 +92,9 @@ dependencies. References: [JupyterLab](https://pypi.org/project/jupyterlab/4.6.4
 [ipykernel](https://pypi.org/project/ipykernel/7.4.0/).
 
 `uv lock` obtains metadata and writes exact versions, conditions, artifact URLs
-and hashes to the target's `uv.lock`. The launcher checks approved HTTPS origins
+and hashes to the target's `uv.lock`. One-Launcher runs it only when no lock is
+supplied; with an existing lock it either installs from it unchanged or fails.
+The launcher checks approved HTTPS origins
 before `uv sync --locked --no-build`; uv verifies wheel hashes. No persistent
 requirements.lock/export step is needed. Generated lock entries can include
 other-platform wheels/source archive metadata; source builds are not allowed.

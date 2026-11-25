@@ -4,6 +4,16 @@ Review date: 2026-10-29. Scope: both launchers, normal `.py` execution, generate
 config, download trust, tests and release delivery. This is a limited engineering
 review, not a certification, penetration test or guarantee of harmless dependencies.
 
+## Application profile alignment (2026-11-25)
+
+- One-Launcher 0.1.5 and Preloaded 0.1.6 both default to uv 0.13.10 and the
+  official CPython 3.15.2 Windows x64 build 20261124. The download phase stays
+  on the target for One-Launcher and on the setup machine for Preloaded.
+- One-Launcher honors an existing trusted, matching `uv.lock`. Stale locks
+  fail closed; rebuilds retain the lock. With no lock, first setup still
+  resolves live. Package dependencies are not audited simply because they lock.
+- JupyterLab stays on its existing pins.
+
 ## Unified UTF-8 output v0.1.4 (2026-10-29)
 
 - Keep the tested uv 0.13.6 / CPython 3.13.18 pins, hashes and download policy.

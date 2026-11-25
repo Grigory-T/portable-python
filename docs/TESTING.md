@@ -31,7 +31,7 @@ After building, from the repository root in PowerShell:
 
 ```powershell
 .\tests\workspace-cleanup.ps1
-.\tests\application.ps1 -Zip .\dist\portable-python-one-launcher-0.1.4-windows-x86_64.zip -Audit
+.\tests\application.ps1 -Zip .\dist\portable-python-one-launcher-0.1.5-windows-x86_64.zip -Audit
 .\tests\jupyterlab.ps1 -Zip .\dist\portable-python-jupyterlab-0.1.4-windows-x86_64.zip -Audit
 ```
 
@@ -45,8 +45,12 @@ These test changes are not shipped in the user ZIPs and do not change START.
 
 Application checks: fresh setup/run, empty-library default, Unicode path,
 unchanged start, actual START.bat, nested absolute/relative imports, original
-app exit code, configuration-drift refusal, neutral journal, and a fresh
-custom PyPI version-range requirement.
+app exit code, configuration-drift refusal, neutral journal, and a fresh install
+of pinned data/Excel libraries with real Polars and Calamine operations. It
+replays a supplied lock, checks stale-lock refusal and verifies that a rebuild
+leaves the lock byte-identical. With `-BlockNetwork` on an ephemeral CI runner,
+the final start runs with outbound traffic blocked for the test uv and Python
+executables. The test removes its rules and workspace.
 
 Shared `tests/encoding.ps1` exercises all three actual prepared launchers in Windows
 PowerShell 5.1 and, when installed, PowerShell 7. It captures Information-stream
