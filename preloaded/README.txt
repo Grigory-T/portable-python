@@ -41,17 +41,19 @@ checks downloaded wheels against uv.lock, and tests an
 offline install without a persistent cache and records the installed
 package names and versions from that throwaway venv. No app is run.
 SETUP produces bundle/ for inspection and prepared-app.zip for transfer.
+bundle-records/ contains the exact pyproject.toml, uv.lock, and download
+provenance.json. Those are online build records, not required on the target.
 The verified ZIP is published only after it has been completely written and
 checked. Temporary files stay under the starter, not Windows Temp.
 Only one SETUP can run in a starter folder at a time. The empty
 .prepare.lock file is not part of the bundle and may remain between runs.
 Read setup.log in the starter for the latest attempt's steps and errors,
-and bundle/provenance.json for each verified download's URL and SHA-256.
+and bundle-records/provenance.json for each verified download's URL and SHA-256.
 Unexpected origins, mismatched hashes and failed checks stop SETUP.
-SETUP will not overwrite an existing bundle/ or prepared-app.zip.
+SETUP will not overwrite existing bundle/, bundle-records/ or prepared-app.zip.
 
 To reproduce the prepared payload, use the same starter and pyproject.toml
-in a fresh folder. Copy a trusted bundle/uv.lock next to
+in a fresh folder. Copy a trusted bundle-records/uv.lock next to
 SETUP.bat before starting. SETUP checks and keeps that lock, never silently
 resolving again. Identical payload bytes and the same Python build produce
 the same automated ZIP; file order and timestamps are fixed.
@@ -71,7 +73,8 @@ expected value. In PowerShell:
     Get-FileHash -LiteralPath .\prepared-app.zip -Algorithm SHA256
 
 If it matches, extract into a fresh short local folder, e.g. C:\apps\project.
-Create application/ and copy your trusted Python files into it. Include
+Add your own input/, output/, workings/, and any other project folders and
+files beside START.bat. Create application/ and copy your trusted Python files. Include
 application/__init__.py (it can be empty) and application/__main__.py (your
 entry point). Nested packages and relative imports work normally. START
 runs "python -m application" with the bundle root as its working directory.
@@ -89,20 +92,20 @@ starts check the interpreter, isolation settings and installed package
 names/versions, then skip installation. This is not a file-by-file audit:
 missing or damaged package contents can still fail at import time.
 
-If START is run without an app, it still prepares Python, creates
-application/ and tells you which entry file is missing. Rerun after
-adding the app. Application files are not hashed by the environment
-manifest. Keep the shipped environment files unchanged: to change the
-Python version or dependency set, prepare a fresh bundle online.
-Store writable inputs/results in data/ (created by START) or outside the
-bundle. Do not move an initialized folder or transfer .venv. Use sys.executable for
+If START is run without an app, it still prepares Python and tells you
+which entry file is missing. It does not create application/, data/, or
+any other user folder. User files beside the launcher are ignored by
+integrity checks and preserved during recovery. Keep shipped files
+unchanged; runtime/, wheelhouse/, .venv/ and .portable-python/ are reserved.
+To change Python or dependencies, prepare a fresh bundle online.
+Do not move an initialized folder or transfer .venv. Use sys.executable for
 Python subprocesses; plain "python" can select a different interpreter.
 The technical launcher displays combined, line-oriented stdout/stderr.
 Full-screen console apps and ANSI cursor/colour control are not guaranteed.
 
 To recover a damaged or interrupted .venv, stop the app and move only the
 .venv directory outside the bundle. Run START.bat again. It verifies the
-payload and recreates the environment offline, leaving data/ alone. No
+payload and recreates the environment offline, leaving user files alone. No
 need to re-extract unless the payload itself is missing or damaged.
 
 Use short paths on both machines (root at most 125 characters; shorter
@@ -114,13 +117,12 @@ START exit: 0 success,
 WHAT IS IN THE PREPARED FOLDER
 
 START.bat and two PowerShell files: offline initialization/launch.
-application/ and data/: local editable code and data, not shipped.
-uv.exe, runtime/, wheelhouse/: the third-party binaries and wheels.
-pyproject.toml, uv.lock: chosen settings and resolved dependency record.
+runtime/: CPython, uv.exe and the bundled license notices.
+wheelhouse/: offline wheel archives; omitted when there are no wheels.
 install-plan.txt: uv-exported hashed installation input, not a second lock.
-bundle-manifest.json: relative paths, shipped file hashes and package inventory.
-provenance.json, LICENSE, THIRD_PARTY.md, licenses/: origins and notices.
+bundle-manifest.json: versions, shipped file hashes and package inventory.
 .venv/ and .portable-python/ are created only by START; never zip them.
+The app, user files, setup records and this guide are not in the transfer ZIP.
 
 SETUP DOWNLOADS (NOT ACCESSED BY START)
 
@@ -130,7 +132,8 @@ https://pypi.org/simple/ and https://files.pythonhosted.org/packages/...
 https://raw.githubusercontent.com/astral-sh/uv/0.13.10/LICENSE-MIT
 https://raw.githubusercontent.com/astral-sh/uv/0.13.10/LICENSE-APACHE
 
-Exact artifact URLs appear during SETUP and in provenance.json / uv.lock.
+Exact artifact URLs appear during SETUP and in bundle-records/provenance.json
+and bundle-records/uv.lock on the online machine.
 Bootstrap redirects must stay on official HTTPS Astral/GitHub release hosts;
 wheel URLs must be on files.pythonhosted.org and may not redirect. TLS
 verification stays enabled. The initial uv.lock resolution trusts PyPI

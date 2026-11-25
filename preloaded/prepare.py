@@ -4,7 +4,6 @@ import hashlib
 import json
 from pathlib import Path
 import re
-import shutil
 import sys
 import tomllib
 from urllib.parse import unquote, urlsplit
@@ -85,8 +84,9 @@ class NoRedirect(HTTPRedirectHandler):
         raise ValueError("Wheel download unexpectedly redirected")
 
 
-def download_wheels(bundle, version):
-    source = read_toml(bundle / "uv.lock")
+def download_wheels(bundle, records, version):
+    records = Path(records)
+    source = read_toml(records / "uv.lock")
     wheels = {}
     for package in source["package"]:
         if package["source"] == {"virtual": "."}:
@@ -105,9 +105,10 @@ def download_wheels(bundle, version):
                     raise ValueError("Conflicting hashes or URLs for the same wheel")
 
     wheelhouse = bundle / "wheelhouse"
-    wheelhouse.mkdir()
+    if wheels:
+        wheelhouse.mkdir()
     opener = build_opener(NoRedirect)
-    provenance_path = bundle / "provenance.json"
+    provenance_path = records / "provenance.json"
     provenance = json.loads(provenance_path.read_text(encoding="utf-8"))
     for name, (url, expected) in sorted(wheels.items()):
         print(f"Download: {url}", flush=True)
@@ -129,7 +130,7 @@ def download_wheels(bundle, version):
     print(f"Verified wheel files: {len(wheels)}")
 
 
-def write_manifest(bundle, inventory):
+def write_manifest(bundle, inventory, python, uv):
     files = {}
     for path in sorted(bundle.rglob("*")):
         if path.is_file():
@@ -137,7 +138,9 @@ def write_manifest(bundle, inventory):
                 files[path.relative_to(bundle).as_posix()] = hashlib.file_digest(stream, "sha256").hexdigest()
     (bundle / "bundle-manifest.json").write_text(
         json.dumps({
-            "schema": 3,
+            "schema": 4,
+            "python": python,
+            "uv": uv,
             "installed_packages": Path(inventory).read_text(encoding="utf-8").splitlines(),
             "sha256": files,
         }, indent=2, ensure_ascii=True) + "\n", encoding="utf-8"

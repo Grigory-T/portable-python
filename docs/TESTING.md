@@ -107,10 +107,11 @@ checks their reported SHA-256, removes their source workspaces, and extracts to 
 spaces, Unicode and brackets. It applies outbound block rules for bundled
 uv and Python on the ephemeral test runner. It checks native and pure-Python
 imports, repeat start, isolation, missing package metadata, offline rebuild,
-automatic `data/` creation, user-data preservation, concurrent SETUP rejection,
-absence of a persistent cache, damaged-wheel rejection and app exit status.
-The transfer ZIP must omit app code. The test adds it on the target, then
-edits and reruns it without reinstalling and verifies it survives recovery.
+concurrent SETUP rejection, absence of a persistent cache, and app exit status.
+It requires the minimal transfer layout and verifies that user-added app code,
+folders and root configuration files work before the first START, on repeat
+runs, and after recovery. Missing/tampered payload and extra runtime files
+must still be rejected. START must not create a default user-data folder.
 SETUP is exercised at the 125-character root limit; both launchers reject
 longer roots before writing state.
 The test removes its rules and owned workspaces.

@@ -42,7 +42,7 @@ def check_profile(name, files):
     metadata = tomllib.loads((source / "pyproject.toml").read_text(encoding="utf-8"))
     project = metadata["project"]
     preloaded = name == "preloaded"
-    assert project["version"] == ("0.1.5" if preloaded else "0.1.4")
+    assert project["version"] == ("0.1.6" if preloaded else "0.1.4")
     assert project["requires-python"] == ("==3.15.2" if preloaded else "==3.13.18")
     assert project["dependencies"] == []
     assert metadata["tool"]["uv"]["required-version"] == ("==0.13.10" if preloaded else f"=={UV_VERSION}")

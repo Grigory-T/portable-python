@@ -10,6 +10,32 @@ $setupLock = $null
 $setupLog = $null
 $code = 10
 
+function Read-Pins([string]$Path) {
+    Assert-NotLinked (Get-Item -LiteralPath $Path -Force)
+    $text = [IO.File]::ReadAllText($Path, $Utf8)
+    $pins = @{}
+    foreach ($entry in @(
+        @('project', 'requires-python', '==(?<value>3\.(?:11|12|13|14|15)\.\d+)'),
+        @('tool.uv', 'required-version', '==(?<value>\d+\.\d+\.\d+)'),
+        @('tool.portable-python', 'uv-archive-sha256', '(?<value>[0-9a-fA-F]{64})'),
+        @('tool.portable-python', 'uv-exe-sha256', '(?<value>[0-9a-fA-F]{64})'),
+        @('tool.portable-python', 'uv-license-mit-sha256', '(?<value>[0-9a-fA-F]{64})'),
+        @('tool.portable-python', 'uv-license-apache-sha256', '(?<value>[0-9a-fA-F]{64})'),
+        @('tool.portable-python', 'python-archive-sha256', '(?<value>[0-9a-fA-F]{64})')
+    )) {
+        $section, $key, $pattern = $entry
+        $tables = [regex]::Matches($text, '(?ms)^[ \t]*\[' + [regex]::Escape($section) + '\][ \t]*(?:#[^\r\n]*)?\r?\n(?<body>.*?)(?=^[ \t]*\[|\z)')
+        if ($tables.Count -ne 1) { throw "Expected one [$section] table in pyproject.toml." }
+        $matched = [regex]::Matches($tables[0].Groups['body'].Value, '(?m)^[ \t]*' + [regex]::Escape($key) + '[ \t]*=[ \t]*"' + $pattern + '"[ \t]*(?:#[^\r\n]*)?\r?$')
+        if ($matched.Count -ne 1) { throw "Invalid exact $section.$key pin in pyproject.toml." }
+        $pins[$key] = $matched[0].Groups['value'].Value.ToLowerInvariant()
+    }
+    if ([version]$pins['required-version'] -lt [version]'0.13.10') {
+        throw 'uv must be at least 0.13.10.'
+    }
+    return $pins
+}
+
 function Write-SetupNote([string]$Message) {
     $text = $Message.Replace($Root, '<starter>').Replace($env:USERPROFILE, '<profile>')
     $text = $text -replace '(?i)(https?://)[^\s/@]+@', '$1<redacted>@'
@@ -85,8 +111,11 @@ try {
     $setupLog = $logPath
     $destination = Join-Path $Root 'bundle'
     $destinationZip = Join-Path $Root 'prepared-app.zip'
-    if ((Test-Path -LiteralPath $destination) -or (Test-Path -LiteralPath $destinationZip)) {
-        throw 'bundle/ or prepared-app.zip already exists. Move the previous outputs aside or use a fresh starter folder.'
+    $destinationRecords = Join-Path $Root 'bundle-records'
+    foreach ($output in @($destination, $destinationRecords, $destinationZip)) {
+        if (Test-Path -LiteralPath $output) {
+            throw 'A SETUP output already exists. Move bundle/, bundle-records/ and prepared-app.zip aside or use a fresh starter folder.'
+        }
     }
     if (@(Get-ChildItem -LiteralPath $Root -Directory -Force -Filter '.prepare-*').Count) {
         throw 'An earlier preparation is active or was interrupted. Review its .prepare-* folder before retrying.'
@@ -103,21 +132,23 @@ try {
     # Already protected by the exclusive lock and the stale-scratch check.
     $stage = Join-Path $Root '.prepare-work'
     $bundle = Join-Path $stage 'bundle'
+    $records = Join-Path $stage 'records'
     $work = Join-Path $stage 'w'
     [IO.Directory]::CreateDirectory($bundle) | Out-Null
+    [IO.Directory]::CreateDirectory($records) | Out-Null
     Set-LocalEnvironment $work
     Set-Location -LiteralPath $bundle
-    foreach ($name in @('START.bat', 'portable-python.ps1', 'portable-common.ps1', 'pyproject.toml',
-                       'README.txt', 'LICENSE', 'THIRD_PARTY.md')) {
+    foreach ($name in @('START.bat', 'portable-python.ps1', 'portable-common.ps1')) {
         $source = Get-Item -LiteralPath (Join-Path $Root $name) -Force
         Assert-NotLinked $source
         [IO.File]::Copy($source.FullName, (Join-Path $bundle $name))
     }
+    [IO.File]::Copy($project, (Join-Path $records 'pyproject.toml'))
     $sourceLock = Join-Path $Root 'uv.lock'
     $reuseLock = Test-Path -LiteralPath $sourceLock
     if ($reuseLock) {
         Assert-NotLinked (Get-Item -LiteralPath $sourceLock -Force)
-        [IO.File]::Copy($sourceLock, (Join-Path $bundle 'uv.lock'))
+        [IO.File]::Copy($sourceLock, (Join-Path $records 'uv.lock'))
         Write-SetupNote 'Using supplied uv.lock; changes require a new lock. No fallback to resolution.'
     } else {
         Write-SetupNote 'No uv.lock supplied; resolving from PyPI.'
@@ -126,19 +157,21 @@ try {
     $archive = Join-Path $work 'uv.zip'
     [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
     $downloads = @(Save-VerifiedDownload $uvUrl $archive $pins['uv-archive-sha256'] 'uv-x86_64-pc-windows-msvc.zip')
-    $notices = Join-Path $bundle 'licenses'
-    [IO.Directory]::CreateDirectory($notices) | Out-Null
+    $launcherLicense = Get-Item -LiteralPath (Join-Path $Root 'LICENSE') -Force
+    Assert-NotLinked $launcherLicense
+    $notices = @('Portable Python launcher (MIT)', [IO.File]::ReadAllText($launcherLicense.FullName, $Utf8))
     foreach ($license in @('mit', 'apache')) {
         $upstreamFile = "LICENSE-$($license.ToUpperInvariant())"
         $licenseUrl = "https://raw.githubusercontent.com/astral-sh/uv/$uvVersion/$upstreamFile"
-        $downloads += Save-VerifiedDownload $licenseUrl (Join-Path $notices "uv-$upstreamFile") $pins["uv-license-$license-sha256"] "licenses/uv-$upstreamFile"
+        $notice = Join-Path $work "uv-$upstreamFile"
+        $downloads += Save-VerifiedDownload $licenseUrl $notice $pins["uv-license-$license-sha256"] "uv-$upstreamFile"
+        $notices += @("uv $uvVersion - $upstreamFile", [IO.File]::ReadAllText($notice, $Utf8))
     }
 
     Add-Type -AssemblyName System.IO.Compression.FileSystem
     $extract = Join-Path $work 'uv'
     [IO.Compression.ZipFile]::ExtractToDirectory($archive, $extract)
-    $uv = Join-Path $bundle 'uv.exe'
-    [IO.File]::Move((Join-Path $extract 'uv.exe'), $uv)
+    $uv = Join-Path $extract 'uv.exe'
     if ((Get-Hash $uv) -ne $pins['uv-exe-sha256']) { throw 'uv.exe failed pinned SHA-256 verification.' }
     Write-SetupNote "SHA-256 VERIFIED: uv.exe $($pins['uv-exe-sha256'])"
     $reported = & $uv --version
@@ -171,19 +204,23 @@ try {
     $runtime = Join-Path $bundle 'runtime'
     [IO.Directory]::Move((Join-Path $installDir $request), $runtime)
     Get-TreeFiles $runtime | Out-Null
+    $bundledUv = Join-Path $runtime 'uv.exe'
+    [IO.File]::Move($uv, $bundledUv)
+    $uv = $bundledUv
+    [IO.File]::WriteAllText((Join-Path $runtime 'BUNDLE-LICENSES.txt'), ($notices -join "`n`n"), $Utf8)
     $python = Join-Path $runtime 'python.exe'
     $helper = Join-Path $Root 'prepare.py'
     $pythonFlags = @('-I', '-S', '-B', '-X', 'utf8', $helper)
-    Invoke-SetupStep 'project_policy_check' $python ($pythonFlags + @('validate', (Join-Path $bundle 'pyproject.toml'), $pythonVersion, $uvVersion))
+    Invoke-SetupStep 'project_policy_check' $python ($pythonFlags + @('validate', (Join-Path $records 'pyproject.toml'), $pythonVersion, $uvVersion))
     $index = 'https://pypi.org/simple'
     $flags = @('--no-config', '--system-certs', '--no-python-downloads')
     if (-not $reuseLock) {
         Invoke-SetupStep 'dependency_lock' $uv ($flags + @(
-            'lock', '--project', $bundle, '--python', $python, '--no-sources', '--no-build', '--default-index', $index
+            'lock', '--project', $records, '--python', $python, '--no-sources', '--no-build', '--default-index', $index
         ))
     }
     Invoke-SetupStep 'export_install_plan' $uv ($flags + @(
-        '--offline', 'export', '--project', $bundle, '--python', $python, '--locked', '--no-default-groups',
+        '--offline', 'export', '--project', $records, '--python', $python, '--locked', '--no-default-groups',
         '--no-emit-project', '--no-header', '--format', 'requirements.txt',
         '--output-file', (Join-Path $bundle 'install-plan.txt'), '--quiet'
     ))
@@ -193,11 +230,11 @@ try {
         uv = $uvVersion
         uv_exe_sha256 = $pins['uv-exe-sha256']
         index = $index
-        uv_lock_sha256 = Get-Hash (Join-Path $bundle 'uv.lock')
+        uv_lock_sha256 = Get-Hash (Join-Path $records 'uv.lock')
         downloads = $downloads
     }
-    [IO.File]::WriteAllText((Join-Path $bundle 'provenance.json'), ($provenance | ConvertTo-Json -Depth 4), $Utf8)
-    Invoke-SetupStep 'download_wheelhouse' $python ($pythonFlags + @('wheels', $bundle, $pythonVersion))
+    [IO.File]::WriteAllText((Join-Path $records 'provenance.json'), ($provenance | ConvertTo-Json -Depth 4), $Utf8)
+    Invoke-SetupStep 'download_wheelhouse' $python ($pythonFlags + @('wheels', $bundle, $records, $pythonVersion))
     # Fresh venv and no retained cache. Fail if the exact target command fails
     # without network, even if every downloaded file passed its own checksum.
     Write-SetupNote 'BEGIN: trial offline installation'
@@ -207,7 +244,7 @@ try {
     $inventory = Join-Path $work 'installed-packages.txt'
     [IO.File]::WriteAllLines($inventory, [string[]]@(Read-EnvironmentPackages $probeVenv $pythonVersion $python), $Utf8)
     Write-SetupNote 'PASS: trial offline installation'
-    Invoke-SetupStep 'manifest' $python ($pythonFlags + @('manifest', $bundle, $inventory))
+    Invoke-SetupStep 'manifest' $python ($pythonFlags + @('manifest', $bundle, $inventory, $pythonVersion, $uvVersion))
 
     $stagedZip = Join-Path $stage 'prepared-app.zip'
     Invoke-SetupStep 'transfer_zip' $python ($pythonFlags + @('zip', $bundle, $stagedZip))
@@ -215,9 +252,11 @@ try {
     Set-Location -LiteralPath $Root
     Remove-PreparationScratch $work
     [IO.Directory]::Move($bundle, $destination)
+    [IO.Directory]::Move($records, $destinationRecords)
     [IO.File]::Move($stagedZip, $destinationZip)
     Write-SetupNote 'Transfer artifact: prepared-app.zip'
     Write-SetupNote "ZIP SHA-256: $zipHash"
+    Write-SetupNote 'Online build records: bundle-records/'
     Write-SetupNote 'PREPARATION SUCCESS: transfer prepared-app.zip, not the starter folder.'
     $code = 0
 } catch {

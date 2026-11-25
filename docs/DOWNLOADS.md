@@ -144,9 +144,10 @@ uv resolves through PyPI (or uses a trusted `uv.lock` provided beside
 `SETUP.bat`). The bundled CPython's standard-library HTTPS client
 downloads matching wheels from the locked `files.pythonhosted.org/packages/`
 URLs without redirects and checks each locked SHA-256. `setup.log` stays in
-the starter directory and shows the steps and failures. `provenance.json` is
-shipped in the prepared payload with the exact artifact URLs and verified
-hashes. PyPI resolution metadata is HTTPS-protected, not independently pinned.
+the starter directory and shows the steps and failures. The exact artifact
+URLs and verified hashes are in `bundle-records/provenance.json` alongside
+the saved TOML and lock on the setup machine, not in the transfer ZIP.
+PyPI resolution metadata is HTTPS-protected, not independently pinned.
 
 The default archives were verified against signed upstream GitHub release
 attestations during pin review. Maintainers may repeat the checks on downloaded

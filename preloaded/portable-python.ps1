@@ -10,31 +10,34 @@ $venv = Join-Path $Root '.venv'
 $python = Join-Path $venv 'Scripts\python.exe'
 $runtime = Join-Path $Root 'runtime\python.exe'
 $manifest = Join-Path $Root 'bundle-manifest.json'
-$project = Join-Path $Root 'pyproject.toml'
 $ready = Join-Path $state 'ready.state'
 $app = Join-Path $Root 'application'
-$data = Join-Path $Root 'data'
 $lock = $null
 $code = 10
 
 function Verify-Bundle($record) {
     $files = $record.sha256.PSObject.Properties
     $verified = 0
-    $payload = foreach ($item in (Get-ChildItem -LiteralPath $Root -Force)) {
-        if ($item.FullName -eq $state) { continue }
+    # Only shipped paths are reserved. Unrelated root files and directories
+    # can be added before or after setup, and survive a rebuild untouched.
+    $payload = foreach ($name in @('START.bat', 'portable-common.ps1', 'portable-python.ps1',
+                                    'install-plan.txt', 'runtime', 'wheelhouse')) {
+        $path = Join-Path $Root $name
+        if (-not (Test-Path -LiteralPath $path)) { continue }
+        $item = Get-Item -LiteralPath $path -Force
         Assert-NotLinked $item
-        if ($item.PSIsContainer -and $item.Name -in @('application', 'data')) { continue }
+        if ($item.PSIsContainer -ne ($name -in @('runtime', 'wheelhouse'))) {
+            throw "Bundle path has the wrong type: $name"
+        }
         if ($item.PSIsContainer) { Get-TreeFiles $item.FullName } else { $item }
     }
-    $payload | ForEach-Object {
-        $relative = $_.FullName.Substring($Root.Length + 1).Replace('\', '/')
-        if ($relative -ne 'bundle-manifest.json') {
-            $entry = $files[$relative]
-            if ($null -eq $entry -or $entry.Value -cnotmatch '^[a-f0-9]{64}$' -or (Get-Hash $_.FullName) -cne $entry.Value) {
-                throw "Bundle file is unexpected or failed SHA-256 verification: $relative"
-            }
-            $verified++
+    foreach ($item in $payload) {
+        $relative = $item.FullName.Substring($Root.Length + 1).Replace('\', '/')
+        $entry = $files[$relative]
+        if ($null -eq $entry -or $entry.Value -cnotmatch '^[a-f0-9]{64}$' -or (Get-Hash $item.FullName) -cne $entry.Value) {
+            throw "Bundle file is unexpected or failed SHA-256 verification: $relative"
         }
+        $verified++
     }
     if ($verified -ne @($files).Count) { throw 'The bundle is missing one or more declared files.' }
     Write-Host "Verified bundle files: $verified"
@@ -46,7 +49,7 @@ try {
     if (-not [IO.File]::Exists($manifest)) {
         throw 'No prepared bundle found. On the online setup machine, run SETUP.bat and transfer the generated prepared-app.zip.'
     }
-    foreach ($path in @($state, $venv, $ready, $data, $manifest, $runtime, $project, (Join-Path $Root 'runtime'))) {
+    foreach ($path in @($state, $venv, $ready, $manifest, $runtime, (Join-Path $Root 'runtime'))) {
         if (Test-Path -LiteralPath $path) { Assert-NotLinked (Get-Item -LiteralPath $path -Force) }
     }
     # Allow concurrent-start rejection without writing into the payload. The
@@ -54,12 +57,11 @@ try {
     $stateItem = [IO.Directory]::CreateDirectory($state)
     Assert-NotLinked $stateItem
     $lock = Open-WorkspaceLock (Join-Path $state 'workspace.lock')
-    $pins = Read-Pins $project
     $record = [IO.File]::ReadAllText($manifest, $Utf8) | ConvertFrom-Json
-    if ($record.schema -ne 3) { throw 'Unsupported bundle manifest.' }
-    $fingerprint = @($Root, (Get-Hash $manifest), (Get-Hash $project)) -join "`n"
+    if ($record.schema -ne 4) { throw 'Unsupported bundle manifest.' }
+    $fingerprint = @($Root, (Get-Hash $manifest)) -join "`n"
     Set-Location -LiteralPath $Root
-    Write-Host "PORTABLE PYTHON (OFFLINE): CPython $($pins['requires-python']), uv $($pins['required-version'])"
+    Write-Host "PORTABLE PYTHON (OFFLINE): CPython $($record.python), uv $($record.uv)"
 
     $recovery = 'With the app stopped, move .venv out of this folder, then run START.bat to rebuild offline.'
     Set-LocalEnvironment $state
@@ -74,15 +76,12 @@ try {
     } else {
         Write-Host 'Please wait: verifying the bundle and installing its wheels offline...'
         Verify-Bundle $record
-        if ((Get-Hash (Join-Path $Root 'uv.exe')) -ne $pins['uv-exe-sha256']) {
-            throw 'Bundled uv.exe failed pinned SHA-256 verification.'
-        }
         if ([IO.File]::Exists($ready)) { [IO.File]::Delete($ready) }
         Initialize-OfflineVenv $Root $venv
         $setup = 'PERFORMED'
     }
     try {
-        $packages = @(Read-EnvironmentPackages $venv $pins['requires-python'] $runtime)
+        $packages = @(Read-EnvironmentPackages $venv $record.python $runtime)
         if (($packages -join "`n") -cne ($record.installed_packages -join "`n")) {
             throw 'Installed package names or versions differ from the prepared bundle.'
         }
@@ -90,15 +89,12 @@ try {
         throw "$($_.Exception.Message) $recovery"
     }
     if ($setup -eq 'PERFORMED') { [IO.File]::WriteAllText($ready, $fingerprint, $Utf8) }
-    # The environment payload is immutable; application/ and data/ are local.
-    Assert-NotLinked ([IO.Directory]::CreateDirectory($data))
     Write-Host 'PORTABLE PYTHON STATUS: READY'
     Write-Host "Setup: $setup"
     Write-Host 'Interpreter: .venv\Scripts\python.exe'
-    Write-Host 'Sources and hashes: provenance.json'
 
     $code = 20
-    Assert-NotLinked ([IO.Directory]::CreateDirectory($app))
+    if ([IO.Directory]::Exists($app)) { Assert-NotLinked (Get-Item -LiteralPath $app -Force) }
     foreach ($name in @('__main__.py', '__init__.py')) {
         $file = Join-Path $app $name
         if (-not [IO.File]::Exists($file)) {

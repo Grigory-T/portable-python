@@ -121,11 +121,13 @@ free of vulnerabilities forever. User-selected libraries require their own
 security/license review.
 
 The online profiles resolve on the target. Preloaded resolves on a dedicated
-online machine and transfers verified runtime files, wheel hashes and the
-locked graph. The manifest checks environment payload integrity on first
+online machine and transfers verified runtime files, wheels, and a hashed
+install plan. The manifest checks environment payload integrity on first
 start or rebuild, not authenticity against a replaced launcher/manifest.
-The app is supplied locally and editable; it is outside the manifest and
-runs with the user's permissions. Verify the prepared archive
+Unrelated root files are not part of the manifest; changes, missing files
+and extra files inside the protected runtime/wheelhouse still fail verification.
+The local app is editable, outside the manifest, and runs with the user's
+permissions. Verify the prepared archive
 hash from a trusted channel. A trusted saved lock is checked as-is during
 Preloaded preparation; a stale lock fails, rather than silently re-resolving.
 On first resolution, TLS and the existing Windows trust store still protect
@@ -155,7 +157,7 @@ certificate-chain rejection fix. The 3.13 line is security-only, not an LTS
 promise or a guarantee that an exact patch remains safe indefinitely. Review
 future security patches and retest rather than indefinitely freezing these pins.
 
-Preloaded v0.1.5 pins [CPython 3.15.2](https://www.python.org/downloads/release/python-3152/)
+Preloaded pins [CPython 3.15.2](https://www.python.org/downloads/release/python-3152/)
 and [uv 0.13.10](https://github.com/astral-sh/uv/releases/tag/0.13.10), which
 includes the updated managed build and a
 [wheel validation security fix](https://github.com/astral-sh/uv/security/advisories/GHSA-vjvj-3m3f-fgmm).

@@ -22,7 +22,7 @@ can take several minutes; unchanged later starts skip package setup.
 |---|---|---|
 | `portable-python-one-launcher-0.1.4-windows-x86_64.zip` | Ordinary Python application | `application/`; entry point `__main__.py` |
 | `portable-python-jupyterlab-0.1.4-windows-x86_64.zip` | Interactive notebooks | `notebooks/`; create or copy `.ipynb` files |
-| `portable-python-preloaded-0.1.5-windows-x86_64.zip` | Prepare a self-contained Python environment for an offline target | `application/` on the offline machine |
+| `portable-python-preloaded-0.1.6-windows-x86_64.zip` | Prepare a self-contained Python environment for an offline target | `application/` on the offline machine |
 
 The online editions are usable immediately. The application examples use only the standard
 library. The notebook example checks its actual interpreter and directory.
@@ -34,16 +34,19 @@ The ZIPs contain readable text source, not an opaque installer or executable.
    Edit `pyproject.toml` and run **SETUP.bat**. No application code is needed.
 2. **Online Windows machine:** Take the generated `prepared-app.zip` and its
    SHA-256 from the console or `setup.log`. The flat ZIP contains verified uv,
-   CPython, wheels and a hashed install plan; no application, `.venv` or setup cache.
+   CPython, wheels, launcher, integrity manifest and hashed install plan.
+   Keep the guide, `setup.log`, and `bundle-records/` on the setup machine.
 3. **Offline Windows machine:** Verify the ZIP hash, extract into a fresh
-   short local folder, add your app under `application/` with `__init__.py`
-   and `__main__.py`, and run **START.bat**. It creates a local `.venv` from the
+   short local folder, add `input/`, `output/`, `workings/` or other files
+   as needed, and add your app under `application/` with `__init__.py`
+   and `__main__.py`. Run **START.bat**. It creates a local `.venv` from the
    bundled runtime, installs wheels without network, and runs the app.
    Later starts check the installed package inventory and skip installation.
    Edit code under `application/` and run START again; changing Python or
    dependencies still requires a fresh environment ZIP from SETUP.
    If the environment is damaged, move only `.venv` outside the bundle and
-   run START to rebuild it offline. Keep the target network blocked by policy
+   run START to rebuild it offline without touching your files. Do not add
+   files inside `runtime/` or `wheelhouse/`. Keep the target network blocked by policy
    if the application itself must not contact the network.
 
 The third release ZIP is the **starter**, not the large prepared bundle. See

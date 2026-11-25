@@ -28,17 +28,26 @@ function Invoke-Target([string]$Root, [int]$Expected) {
     return $text
 }
 
+function Get-TestRequirements {
+    $pins.data.PSObject.Properties | ForEach-Object {
+        $override = $pins.preloaded.PSObject.Properties[$_.Name]
+        $version = if ($override) { $override.Value } else { $_.Value }
+        "$($_.Name)==$version"
+    }
+    "colorama==0.4.6; sys_platform == 'win32'"
+}
+
 function Add-OfflineTestApplication([string]$Target, [string]$Scenario) {
     $app = [IO.Directory]::CreateDirectory((Join-Path $Target 'application')).FullName
     [IO.File]::WriteAllText((Join-Path $app '__init__.py'), '', $utf8)
     [IO.File]::WriteAllText((Join-Path $app $unicodeFixture), 'offline application data', $utf8)
     if ($Scenario -eq 'wheels') {
+        [IO.File]::WriteAllLines((Join-Path $app 'test-requirements.txt'), [string[]]@(Get-TestRequirements), $utf8)
         [IO.File]::WriteAllText((Join-Path $Target 'application\__main__.py'), @'
 from pathlib import Path
 from importlib.metadata import version
 from io import BytesIO
 import sys
-import tomllib
 import colorama
 import openpyxl
 import polars as pl
@@ -49,7 +58,7 @@ from .nested.probe import value
 from more_itertools import chunked
 assert Path(sys._base_executable).resolve() == Path("runtime/python.exe").resolve()
 assert sys.version_info[:3] == (3, 15, 2)
-for requirement in tomllib.loads(Path('pyproject.toml').read_text(encoding='utf-8'))['project']['dependencies']:
+for requirement in Path(__file__).with_name('test-requirements.txt').read_text(encoding='utf-8').splitlines():
     name, expected = requirement.split(';')[0].strip().split('==')
     assert version(name) == expected, name
 assert pl.DataFrame({"x": [1, 2, 3]})["x"].sum() == 6
@@ -64,6 +73,8 @@ stream.seek(0)
 assert CalamineWorkbook.from_filelike(stream).get_sheet_by_name("Check").to_python() == [[42]]
 assert list(chunked(range(5), 3)) == [[0, 1, 2], [3, 4]]
 assert value == 42
+assert Path('input').is_dir() and Path('output').is_dir() and Path('workings').is_dir()
+assert Path('run-settings.txt').read_text(encoding='utf-8') == 'local user file'
 print("WHEELS AND NESTED IMPORTS SUCCESS")
 '@, $utf8)
         [IO.Directory]::CreateDirectory((Join-Path $Target 'application\nested')) | Out-Null
@@ -76,7 +87,7 @@ import sys
 
 if os.getenv('PORTABLE_TEST_EXIT'):
     raise SystemExit(7)
-assert Path('data').is_dir()
+assert not Path('data').exists()
 text = '\u0424\u043e\u0440\u043c\u0438\u0440\u043e\u0432\u0430\u043d\u0438\u0435 | \u0401\u0451 | \u20ac | \u65e5\u672c\u8a9e | \U0001f600'
 print('UTF8_STDOUT|' + text)
 print('UTF8_STDERR|' + text, file=sys.stderr)
@@ -99,12 +110,7 @@ function New-PreparedTestZip([string]$Scenario) {
         }
         if ($scenario -eq 'wheels') {
             $project = Join-Path $source 'pyproject.toml'
-            $requirements = @($pins.data.PSObject.Properties | ForEach-Object {
-                $override = $pins.preloaded.PSObject.Properties[$_.Name]
-                $version = if ($override) { $override.Value } else { $_.Value }
-                "$($_.Name)==$version"
-            })
-            $requirements += "colorama==0.4.6; sys_platform == 'win32'"
+            $requirements = @(Get-TestRequirements)
             $toml = [IO.File]::ReadAllText($project).Replace('dependencies = []',
                 ('dependencies = ' + (ConvertTo-Json -InputObject $requirements -Compress)))
             [IO.File]::WriteAllText($project, $toml, $utf8)
@@ -143,13 +149,21 @@ function New-PreparedTestZip([string]$Scenario) {
         $bundle = Join-Path $source 'bundle'
         $outputZip = Join-Path $source 'prepared-app.zip'
         $zipHash = (Get-FileHash -LiteralPath $outputZip).Hash
-        $provenance = [IO.File]::ReadAllText((Join-Path $bundle 'provenance.json')) | ConvertFrom-Json
-        $locked = Join-Path $bundle 'uv.lock'
+        $records = Join-Path $source 'bundle-records'
+        $provenance = [IO.File]::ReadAllText((Join-Path $records 'provenance.json')) | ConvertFrom-Json
+        $locked = Join-Path $records 'uv.lock'
         if ($provenance.uv_lock_sha256 -ne (Get-FileHash -LiteralPath $locked).Hash -or
+            $provenance.uv_exe_sha256 -ne (Get-FileHash -LiteralPath (Join-Path $bundle 'runtime\uv.exe')).Hash -or
+            (Get-FileHash -LiteralPath (Join-Path $source 'pyproject.toml')).Hash -ne
+                (Get-FileHash -LiteralPath (Join-Path $records 'pyproject.toml')).Hash -or
             @($provenance.downloads | Where-Object { $_.url -notmatch '^https://' -or $_.sha256 -notmatch '^[a-f0-9]{64}$' }).Count) {
             throw 'Bundle provenance is incomplete or inconsistent.'
         }
-        $wheels = @(Get-ChildItem -LiteralPath (Join-Path $bundle 'wheelhouse') -Filter '*.whl')
+        $wheels = @()
+        $wheelhouse = Join-Path $bundle 'wheelhouse'
+        if ([IO.Directory]::Exists($wheelhouse)) {
+            $wheels = @(Get-ChildItem -LiteralPath $wheelhouse -Filter '*.whl')
+        }
         if (@($provenance.downloads).Count -ne (4 + $wheels.Count)) {
             throw 'A downloaded artifact is missing from provenance.'
         }
@@ -164,6 +178,7 @@ function New-PreparedTestZip([string]$Scenario) {
             $firstManifest = (Get-FileHash -LiteralPath $manifestPath).Hash
             [IO.File]::Copy($locked, (Join-Path $source 'uv.lock'))
             [IO.Directory]::Delete($bundle, $true)
+            [IO.Directory]::Delete($records, $true)
             [IO.File]::Delete($outputZip)
             & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $source 'prepare.ps1') | Out-Host
             if ($LASTEXITCODE -ne 0 -or (Get-FileHash -LiteralPath $manifestPath).Hash -ne $firstManifest -or
@@ -177,11 +192,6 @@ function New-PreparedTestZip([string]$Scenario) {
         }
         if ([IO.File]::ReadAllText((Join-Path $source 'setup.log')) -notmatch ('ZIP SHA-256: ' + $zipHash)) {
             throw 'SETUP did not report the actual transfer ZIP hash.'
-        }
-        foreach ($forbidden in @('.venv', '.portable-python', '.prepare.lock', 'prepare.ps1', 'prepare.py', 'SETUP.bat', 'setup.log', 'data', 'application')) {
-            if (Test-Path -LiteralPath (Join-Path $bundle $forbidden)) {
-                throw "Prepared bundle includes unshippable content: $forbidden"
-            }
         }
         $preparedZip = Join-Path $testRoot "$scenario prepared.zip"
         [IO.File]::Move($outputZip, $preparedZip)
@@ -216,12 +226,20 @@ try {
         }
         $target = Join-Path $testRoot ("$scenario target " + [char]0x00e9 + ' [literal]')
         [IO.Compression.ZipFile]::ExtractToDirectory($preparedZip, $target)
-        if (-not [IO.File]::Exists((Join-Path $target 'START.bat')) -or
-            (Test-Path -LiteralPath (Join-Path $target 'application'))) {
-            throw 'Transfer ZIP is not flat or contains application code.'
+        $expected = @('START.bat', 'portable-common.ps1', 'portable-python.ps1', 'bundle-manifest.json',
+                      'install-plan.txt', 'runtime')
+        if ($scenario -eq 'wheels') { $expected += 'wheelhouse' }
+        $actual = @(Get-ChildItem -LiteralPath $target -Force | ForEach-Object { $_.Name })
+        if (Compare-Object $expected $actual -CaseSensitive) {
+            throw 'Transfer ZIP does not match the exact minimal layout.'
+        }
+        $notices = [IO.File]::ReadAllText((Join-Path $target 'runtime\BUNDLE-LICENSES.txt'))
+        if ($notices -notmatch 'Portable Python launcher \(MIT\)' -or
+            $notices -notmatch 'Astral Software Inc\.' -or $notices -notmatch 'Apache License') {
+            throw 'Transferred launcher and uv license notices are incomplete.'
         }
         if ($BlockNetwork) {
-            foreach ($exe in @('uv.exe', 'runtime\python.exe', '.venv\Scripts\python.exe')) {
+            foreach ($exe in @('runtime\uv.exe', 'runtime\python.exe', '.venv\Scripts\python.exe')) {
                 New-NetFirewallRule -DisplayName "Preloaded test: $exe" -Group $group -Direction Outbound -Action Block -Profile Any -Program (Join-Path $target $exe) | Out-Null
             }
             if (@(Get-NetFirewallRule -Group $group | Where-Object { $_.Enabled -eq 'True' -and $_.Action -eq 'Block' }).Count -lt 3) {
@@ -231,9 +249,18 @@ try {
         $env:UV_INDEX = 'https://invalid.invalid/simple'
         $env:UV_PYTHON_INSTALL_DIR = 'C:\not-the-portable-runtime'
         $env:UV_OFFLINE = 'false'
+        foreach ($folder in @('input', 'output', 'workings', 'other [local]')) {
+            [IO.Directory]::CreateDirectory((Join-Path $target $folder)) | Out-Null
+            [IO.File]::WriteAllText((Join-Path (Join-Path $target $folder) $unicodeFixture), "keep $folder", $utf8)
+        }
+        [IO.File]::WriteAllText((Join-Path $target 'run-settings.txt'), 'local user file', $utf8)
+        foreach ($name in @('uv.toml', 'pyproject.toml', 'uv.lock', '.python-version')) {
+            [IO.File]::WriteAllText((Join-Path $target $name), 'unrelated user file', $utf8)
+        }
         if ($scenario -eq 'stdlib') {
             $emptyApp = Invoke-Target $target 20
-            if ($emptyApp -notmatch 'Setup: PERFORMED' -or $emptyApp -notmatch 'Add application') {
+            if ($emptyApp -notmatch 'Setup: PERFORMED' -or $emptyApp -notmatch 'Add application' -or
+                (Test-Path -LiteralPath (Join-Path $target 'application'))) {
                 throw 'A missing app did not leave a ready environment and show actionable instructions.'
             }
         }
@@ -244,11 +271,12 @@ try {
         if ($scenario -eq 'wheels' -and $first -notmatch 'WHEELS AND NESTED IMPORTS SUCCESS') { throw 'Bundled wheels did not import.' }
         [IO.File]::AppendAllText((Join-Path $target 'application\__main__.py'),
             "`nprint('OFFLINE EDIT SUCCESS')`n", $utf8)
+        [IO.File]::WriteAllText((Join-Path $target 'output\new-file.txt'), 'new local file', $utf8)
         $edited = Invoke-Target $target 0
         if ($edited -notmatch 'Setup: SKIPPED' -or $edited -notmatch 'OFFLINE EDIT SUCCESS') {
             throw 'Editing application code required setup or did not run the edited code.'
         }
-        if (-not [IO.Directory]::Exists((Join-Path $target 'data'))) { throw 'START did not create data/.' }
+        if (Test-Path -LiteralPath (Join-Path $target 'data')) { throw 'START created an unnecessary data/ folder.' }
         if (Test-Path -LiteralPath (Join-Path $target '.portable-python\cache')) { throw 'Offline START retained a uv cache.' }
         if ($scenario -eq 'stdlib') {
             & (Join-Path $PSScriptRoot 'encoding.ps1') -Launcher (Join-Path $target 'portable-python.ps1') -Root $target -TestRoot $testRoot -Profile Preloaded
@@ -275,20 +303,37 @@ try {
             # Remove only our disposable test venv. START's recovery contract
             # is the same when a user has moved their venv outside the bundle.
             [IO.Directory]::Delete($venv, $true)
-            $data = [IO.Directory]::CreateDirectory((Join-Path $target 'data'))
-            $output = Join-Path $data.FullName 'keep.txt'
-            [IO.File]::WriteAllText($output, 'keep', $utf8)
             $recovered = Invoke-Target $target 0
             if ($recovered -notmatch 'Setup: PERFORMED' -or $recovered -notmatch 'OFFLINE EDIT SUCCESS' -or
                 $recovered -notmatch 'WHEELS AND NESTED IMPORTS SUCCESS' -or
-                [IO.File]::ReadAllText($output) -ne 'keep') { throw 'Offline recovery failed or changed user data.' }
+                [IO.File]::ReadAllText((Join-Path $target 'output\new-file.txt')) -ne 'new local file') {
+                throw 'Offline recovery failed or changed user data.'
+            }
 
             $bad = Join-Path $testRoot 'damaged'
             [IO.Compression.ZipFile]::ExtractToDirectory($preparedZip, $bad)
+            $unexpected = Join-Path $bad 'runtime\extra.txt'
+            [IO.File]::WriteAllText($unexpected, 'unexpected runtime file', $utf8)
+            if ((Invoke-Target $bad 10) -notmatch 'failed SHA-256 verification: runtime/extra.txt') {
+                throw 'Unexpected files inside the protected runtime were accepted.'
+            }
+            [IO.File]::Delete($unexpected)
+            $runtimeUv = Join-Path $bad 'runtime\uv.exe'
+            $missing = Join-Path $testRoot 'missing-uv.exe'
+            [IO.File]::Move($runtimeUv, $missing)
+            if ((Invoke-Target $bad 10) -notmatch 'missing one or more declared files') {
+                throw 'Missing payload file was not detected.'
+            }
+            [IO.File]::Move($missing, $runtimeUv)
             $wheel = Get-ChildItem -LiteralPath (Join-Path $bad 'wheelhouse') -Filter '*.whl' | Select-Object -First 1
             [IO.File]::AppendAllText($wheel.FullName, 'damaged', $utf8)
             if ((Invoke-Target $bad 10) -notmatch 'failed SHA-256 verification' -or
                 (Test-Path -LiteralPath (Join-Path $bad '.venv'))) { throw 'Damaged wheel was not rejected before installation.' }
+        }
+        foreach ($folder in @('input', 'output', 'workings', 'other [local]')) {
+            if ([IO.File]::ReadAllText((Join-Path (Join-Path $target $folder) $unicodeFixture)) -ne "keep $folder") {
+                throw "User data changed: $folder"
+            }
         }
         $env:UV_INDEX = $null
         $env:UV_PYTHON_INSTALL_DIR = $null
