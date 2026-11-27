@@ -47,6 +47,7 @@ function Add-TestApplication([string]$Target, [string]$Scenario) {
         [IO.File]::WriteAllLines((Join-Path $app 'test-requirements.txt'), [string[]]@(Get-TestRequirements), $utf8)
         [IO.File]::WriteAllText((Join-Path $Target 'application\__main__.py'), @'
 from pathlib import Path
+from importlib import import_module
 from importlib.metadata import version
 from io import BytesIO
 import sys
@@ -55,7 +56,6 @@ import polars as pl
 import xlrd
 import xlsxwriter
 from python_calamine import CalamineWorkbook
-from polars._plr import plr
 from .nested.probe import value
 from more_itertools import chunked
 assert Path(sys._base_executable).resolve() == Path("runtime/python.exe").resolve()
@@ -65,7 +65,8 @@ for requirement in requirements:
     name, expected = requirement.split(';')[0].strip().split('==')
     assert version(name.split('[')[0]) == expected, name
 polars_runtime = '_polars_runtime_compat' if any('[rtcompat]' in req for req in requirements) else '_polars_runtime_32'
-assert plr.__name__.partition('.')[0] == polars_runtime, plr.__name__
+plr = import_module('polars._plr')
+assert plr is import_module(f'{polars_runtime}._polars_runtime'), plr.__file__
 assert pl.DataFrame({"x": [1, 2, 3]})["x"].sum() == 6
 stream = BytesIO()
 with xlsxwriter.Workbook(stream, {"in_memory": True}) as workbook:
