@@ -146,7 +146,10 @@ function Confirm-ReproducibleSetup([string]$Source, [string]$OriginalLog) {
     $expected = @(Get-PreparedSnapshot $Source)
     foreach ($replay in @($false, $true)) {
         $variant = if ($replay) { 'saved lock replay' } else { 'fresh resolution' }
-        $fresh = Join-Path $testRoot ($variant + ' ' + [char]0x00e9 + ' [literal]')
+        # CI already has a deep checkout. Keep these paths below the
+        # production limit while still testing a different Unicode path.
+        $leaf = if ($replay) { 'lock' } else { 'fresh' }
+        $fresh = Join-Path $testRoot ($leaf + ' ' + [char]0x00e9 + ' [x]')
         [IO.Compression.ZipFile]::ExtractToDirectory($starterZip, $fresh)
         [IO.File]::Copy((Join-Path $Source 'bundle-records\pyproject.toml'), (Join-Path $fresh 'pyproject.toml'), $true)
         if ($replay) {
