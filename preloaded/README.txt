@@ -4,11 +4,15 @@ Both machines need 64-bit Windows PowerShell 5.1, a private writable
 folder on a local fixed drive and permission to run the bundled code.
 No admin install, global PATH changes, system Python, pip or compilers.
 
+Terms: the Starter ZIP is the release download. The prepared folder is
+bundle/ created by SETUP.bat. The Transfer ZIP is the final archive that the
+IT specialist makes from the prepared folder after adding the application.
+
 1. ONLINE SETUP MACHINE
 
 Unpack the small starter ZIP into a fresh short local folder, for example
-C:\apps\prep. This step prepares the Python environment only; SETUP does not
-read, execute or include application code. Add it on the offline target.
+C:\apps\prep. SETUP prepares the Python environment only. It does not read
+or run the application or create the Transfer ZIP.
 
 Edit pyproject.toml before SETUP. Exact CPython and uv pins default to
 3.15.2 and 0.13.10. Choose a normal Windows AMD64 CPython 3.11–3.15 build
@@ -27,6 +31,12 @@ Windows AMD64 native and stable-ABI wheels are supported. No source builds,
 custom indexes, direct URLs or git/path dependencies. Older native wheels
 may not support 3.15; choose a release with a matching wheel. Without a uv.lock next
 to SETUP.bat, SETUP resolves from PyPI; later resolutions can differ.
+Windows wheels tagged win_amd64 target both Intel and AMD x86-64 CPUs.
+Libraries can still require specific instructions. For example, if AVX2
+support on the offline target machine is unknown, use Polars' official
+compatibility extra in project.dependencies: "polars[rtcompat]==2.2.0".
+SETUP bundles the relevant wheels; no CPU-brand detection or target download
+is needed. See https://docs.pola.rs/user-guide/installation/#legacy-cpu
 Avoid dependency markers based on platform_version or platform_release.
 If they select different packages on the target, START rejects the inventory
 mismatch. Prepare for a matching Windows environment instead.
@@ -40,50 +50,56 @@ verified local archive while offline. SETUP then locks package versions,
 checks downloaded wheels against uv.lock, and tests an
 offline install without a persistent cache and records the installed
 package names and versions from that throwaway venv. No app is run.
-SETUP produces bundle/ for inspection and prepared-app.zip for transfer.
+SETUP produces the prepared folder (bundle/).
 bundle-records/ contains the exact pyproject.toml, uv.lock, and download
 provenance.json. Those are online build records, not required on the target.
-The verified ZIP is published only after it has been completely written and
-checked. Temporary files stay under the starter, not Windows Temp.
+Temporary files stay under the extracted Starter ZIP, not Windows Temp.
 Only one SETUP can run in a starter folder at a time. The empty
 .prepare.lock file is not part of the bundle and may remain between runs.
 Read setup.log in the starter for the latest attempt's steps and errors,
 and bundle-records/provenance.json for each verified download's URL and SHA-256.
 Unexpected origins, mismatched hashes and failed checks stop SETUP.
-SETUP will not overwrite existing bundle/, bundle-records/ or prepared-app.zip.
+SETUP will not overwrite existing bundle/ or bundle-records/.
 
 To reproduce the prepared payload, use the same starter and pyproject.toml
 in a fresh folder. Copy a trusted bundle-records/uv.lock next to
 SETUP.bat before starting. SETUP checks and keeps that lock, never silently
-resolving again. Identical payload bytes and the same Python build produce
-the same automated ZIP; file order and timestamps are fixed.
+resolving again. This reproduces the prepared environment, not necessarily
+the exact bytes of a manually created Transfer ZIP.
 
-Transfer only prepared-app.zip; no manual archiving is needed. SETUP prints
-the ZIP SHA-256 in the console and records it in setup.log. Send the hash
-through a trusted channel separately. The ZIP uses standard DEFLATE with
-UTF-8 filenames where needed and no wrapper folder or encryption. Very large
-archives can require ZIP64. Other operating systems can read the ZIP, but
-the packaged app still targets Windows 11 x64. Review app files for secrets
-before transfer; internal hashes are not an independent signature.
+After SETUP succeeds, the IT specialist:
+
+1. Reviews the prepared folder, setup.log, and bundle-records/.
+2. Adds application/ with __init__.py (which can be empty) and __main__.py
+   (the entry point). Adds input/, workings/ and output/ alongside START.bat,
+   and places any needed project files in those folders. Nested Python
+   packages and relative imports work normally. Use UTF-8 Python source and
+   paths based on __file__ or on the project folder.
+3. Reviews the files for secrets or anything that should not be transferred.
+   Keeps the launcher, runtime/, wheelhouse/, install-plan.txt and
+   bundle-manifest.json unchanged. Retains bundled license notices.
+4. Creates the Transfer ZIP outside bundle/, for example prepared-app.zip.
+   In File Explorer, select the contents of bundle/ and compress them to a
+   standard ZIP. Check that START.bat and all four application/data folders
+   are at the ZIP root, including any empty folders. Do not ZIP the bundle/
+   folder itself or include setup records, .venv/, caches or scratch files.
+5. Computes SHA-256 of the final Transfer ZIP and provides the expected
+   value separately through a trusted channel:
+       Get-FileHash -LiteralPath .\prepared-app.zip -Algorithm SHA256
+   Transfer the ZIP, not the Starter ZIP or the prepared folder.
 
 2. OFFLINE TARGET MACHINE
 
-Copy prepared-app.zip locally and verify its SHA-256 against the trusted
-expected value. In PowerShell:
+Copy the Transfer ZIP locally and compare its SHA-256 with the trusted
+expected value before extracting. In PowerShell:
     Get-FileHash -LiteralPath .\prepared-app.zip -Algorithm SHA256
 
 If it matches, extract into a fresh short local folder, e.g. C:\apps\project.
-Add your own input/, output/, workings/, and any other project folders and
-files beside START.bat. Create application/ and copy your trusted Python files. Include
-application/__init__.py (it can be empty) and application/__main__.py (your
-entry point). Nested packages and relative imports work normally. START
-runs "python -m application" with the bundle root as its working directory.
-Save Python source as UTF-8 and use paths relative to __file__ or the
-bundle root. To make a code-only change, edit or replace files under
-application/ while the app is stopped, then run START again. No rebuild.
+Put your files in input/, then double-click START.bat. The application and
+project folders are already included. START runs "python -m application"
+with the project folder as its working directory.
 
-Double-click START.bat. No network
-access is needed or used by the launcher: uv runs with --offline,
+No network access is needed or used by the launcher: uv runs with --offline,
 --no-config, --no-python-downloads and --no-index during wheel sync.
 It verifies payload files on first start or rebuild, creates .venv from
 runtime/ at the extraction path, and uses uv to select local wheels for
@@ -97,7 +113,8 @@ which entry file is missing. It does not create application/, data/, or
 any other user folder. User files beside the launcher are ignored by
 integrity checks and preserved during recovery. Keep shipped files
 unchanged; runtime/, wheelhouse/, .venv/ and .portable-python/ are reserved.
-To change Python or dependencies, prepare a fresh bundle online.
+For code-only updates, IT can replace application/ and make a new Transfer
+ZIP without rerunning SETUP. Python or dependency changes need a fresh SETUP.
 Do not move an initialized folder or transfer .venv. Use sys.executable for
 Python subprocesses; plain "python" can select a different interpreter.
 The technical launcher displays combined, line-oriented stdout/stderr.
@@ -122,7 +139,8 @@ wheelhouse/: offline wheel archives; omitted when there are no wheels.
 install-plan.txt: uv-exported hashed installation input, not a second lock.
 bundle-manifest.json: versions, shipped file hashes and package inventory.
 .venv/ and .portable-python/ are created only by START; never zip them.
-The app, user files, setup records and this guide are not in the transfer ZIP.
+IT adds application/, input/, workings/ and output/ to the Transfer ZIP.
+The Starter ZIP, setup records and this guide stay on the online setup machine.
 
 SETUP DOWNLOADS (NOT ACCESSED BY START)
 

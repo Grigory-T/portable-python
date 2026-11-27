@@ -22,7 +22,7 @@ can take several minutes; unchanged later starts skip package setup.
 |---|---|---|
 | `portable-python-one-launcher-0.1.5-windows-x86_64.zip` | Ordinary Python application | `application/`; entry point `__main__.py` |
 | `portable-python-jupyterlab-0.1.4-windows-x86_64.zip` | Interactive notebooks | `notebooks/`; create or copy `.ipynb` files |
-| `portable-python-preloaded-0.1.6-windows-x86_64.zip` | Prepare a self-contained Python environment for an offline target | `application/` on the offline machine |
+| `portable-python-preloaded-0.1.7-windows-x86_64.zip` | Prepare a self-contained Python environment for an offline target | `application/` in the prepared folder on the online setup machine |
 
 The online editions are usable immediately. The application examples use only the standard
 library. The notebook example checks its actual interpreter and directory.
@@ -56,29 +56,28 @@ with `uv sync --locked` and fails if uv reports it stale or invalid. If the
 lock is absent, START creates it on the target before syncing. The target
 downloads and installs its own runtime and wheels in both cases.
 
-### Preloaded: online setup machine → offline target
+### Preloaded: online setup machine → offline target machine
 
-1. **Online Windows machine:** Extract the starter into a short local path.
-   Edit `pyproject.toml` and run **SETUP.bat**. No application code is needed.
-2. **Online Windows machine:** Take the generated `prepared-app.zip` and its
-   SHA-256 from the console or `setup.log`. The flat ZIP contains verified uv,
-   CPython, wheels, launcher, integrity manifest and hashed install plan.
-   Keep the guide, `setup.log`, and `bundle-records/` on the setup machine.
-3. **Offline Windows machine:** Verify the ZIP hash, extract into a fresh
-   short local folder, add `input/`, `output/`, `workings/` or other files
-   as needed, and add your app under `application/` with `__init__.py`
-   and `__main__.py`. Run **START.bat**. It creates a local `.venv` from the
-   bundled runtime, installs wheels without network, and runs the app.
-   Later starts check the installed package inventory and skip installation.
-   Edit code under `application/` and run START again; changing Python or
-   dependencies still requires a fresh environment ZIP from SETUP.
-   If the environment is damaged, move only `.venv` outside the bundle and
-   run START to rebuild it offline without touching your files. Do not add
-   files inside `runtime/` or `wheelhouse/`. Keep the target network blocked by policy
-   if the application itself must not contact the network.
+1. **Online setup machine:** Extract the **Starter ZIP** into a short local
+   path. Edit `pyproject.toml` and run **SETUP.bat**. It creates the **prepared
+   folder** (`bundle/`) with verified CPython, uv, wheels as needed, and the
+   offline launcher. It does not create a ZIP or run the application.
+2. **Online setup machine:** IT reviews the prepared folder and adds
+   `application/` (with `__init__.py` and `__main__.py`), `input/`,
+   `workings/` and `output/`. ZIP the contents, with `START.bat` at the root.
+   Transfer this **Transfer ZIP** and share its SHA-256 through a trusted
+   channel. Keep `setup.log` and `bundle-records/` on the online setup machine.
+3. **Offline target machine:** Verify the Transfer ZIP's SHA-256, extract it
+   into a fresh short local folder, put your files in `input/`, and run
+   **START.bat**. It creates `.venv` from bundled files without network access,
+   then runs the application. Later starts check the environment and skip
+   installation if it is ready.
 
-The third release ZIP is the **starter**, not the large prepared bundle. See
-[the included guide](preloaded/README.txt) for commands and the file contract.
+Keep the prepared environment files unchanged. Code-only updates can be
+repackaged without SETUP; Python or dependency changes need fresh preparation.
+If the environment is damaged, move only `.venv` out of the project folder
+and rerun START to rebuild offline. Keep target networking blocked by policy
+if the application itself must not use it. See [the included guide](preloaded/README.txt).
 
 ## Supported environment
 

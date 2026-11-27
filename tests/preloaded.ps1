@@ -3,7 +3,8 @@ param(
     [Parameter(Mandatory=$true, ParameterSetName='Starter')][string]$Zip,
     [Parameter(ParameterSetName='Starter')][string]$ExportBundle,
     [Parameter(Mandatory=$true, ParameterSetName='Target')][string]$TargetBundle,
-    [switch]$BlockNetwork
+    [switch]$BlockNetwork,
+    [switch]$PolarsCompatibilityRuntime
 )
 $ErrorActionPreference = 'Stop'
 $utf8 = New-Object Text.UTF8Encoding($false)
@@ -32,15 +33,16 @@ function Get-TestRequirements {
     $pins.data.PSObject.Properties | ForEach-Object {
         $override = $pins.preloaded.PSObject.Properties[$_.Name]
         $version = if ($override) { $override.Value } else { $_.Value }
-        "$($_.Name)==$version"
+        $name = if ($PolarsCompatibilityRuntime -and $_.Name -eq 'polars') { 'polars[rtcompat]' } else { $_.Name }
+        $marker = if ($_.Name -eq 'more-itertools') { "; sys_platform == 'win32'" } else { '' }
+        "$name==$version$marker"
     }
-    "colorama==0.4.6; sys_platform == 'win32'"
 }
 
-function Add-OfflineTestApplication([string]$Target, [string]$Scenario) {
+function Add-TestApplication([string]$Target, [string]$Scenario) {
     $app = [IO.Directory]::CreateDirectory((Join-Path $Target 'application')).FullName
     [IO.File]::WriteAllText((Join-Path $app '__init__.py'), '', $utf8)
-    [IO.File]::WriteAllText((Join-Path $app $unicodeFixture), 'offline application data', $utf8)
+    [IO.File]::WriteAllText((Join-Path $app $unicodeFixture), 'packaged application data', $utf8)
     if ($Scenario -eq 'wheels') {
         [IO.File]::WriteAllLines((Join-Path $app 'test-requirements.txt'), [string[]]@(Get-TestRequirements), $utf8)
         [IO.File]::WriteAllText((Join-Path $Target 'application\__main__.py'), @'
@@ -48,19 +50,22 @@ from pathlib import Path
 from importlib.metadata import version
 from io import BytesIO
 import sys
-import colorama
 import openpyxl
 import polars as pl
 import xlrd
 import xlsxwriter
 from python_calamine import CalamineWorkbook
+from polars._plr import plr
 from .nested.probe import value
 from more_itertools import chunked
 assert Path(sys._base_executable).resolve() == Path("runtime/python.exe").resolve()
 assert sys.version_info[:3] == (3, 15, 2)
-for requirement in Path(__file__).with_name('test-requirements.txt').read_text(encoding='utf-8').splitlines():
+requirements = Path(__file__).with_name('test-requirements.txt').read_text(encoding='utf-8').splitlines()
+for requirement in requirements:
     name, expected = requirement.split(';')[0].strip().split('==')
-    assert version(name) == expected, name
+    assert version(name.split('[')[0]) == expected, name
+polars_runtime = '_polars_runtime_compat' if any('[rtcompat]' in req for req in requirements) else '_polars_runtime_32'
+assert plr.__name__.partition('.')[0] == polars_runtime, plr.__name__
 assert pl.DataFrame({"x": [1, 2, 3]})["x"].sum() == 6
 stream = BytesIO()
 with xlsxwriter.Workbook(stream, {"in_memory": True}) as workbook:
@@ -74,6 +79,7 @@ assert CalamineWorkbook.from_filelike(stream).get_sheet_by_name("Check").to_pyth
 assert list(chunked(range(5), 3)) == [[0, 1, 2], [3, 4]]
 assert value == 42
 assert Path('input').is_dir() and Path('output').is_dir() and Path('workings').is_dir()
+assert Path('input/user-input.txt').read_text(encoding='utf-8') == 'added offline'
 assert Path('run-settings.txt').read_text(encoding='utf-8') == 'local user file'
 print("WHEELS AND NESTED IMPORTS SUCCESS")
 '@, $utf8)
@@ -88,6 +94,7 @@ import sys
 if os.getenv('PORTABLE_TEST_EXIT'):
     raise SystemExit(7)
 assert not Path('data').exists()
+assert Path('input/user-input.txt').read_text(encoding='utf-8') == 'added offline'
 text = '\u0424\u043e\u0440\u043c\u0438\u0440\u043e\u0432\u0430\u043d\u0438\u0435 | \u0401\u0451 | \u20ac | \u65e5\u672c\u8a9e | \U0001f600'
 print('UTF8_STDOUT|' + text)
 print('UTF8_STDERR|' + text, file=sys.stderr)
@@ -147,8 +154,11 @@ function New-PreparedTestZip([string]$Scenario) {
             throw 'Online preparation left scratch work.'
         }
         $bundle = Join-Path $source 'bundle'
-        $outputZip = Join-Path $source 'prepared-app.zip'
-        $zipHash = (Get-FileHash -LiteralPath $outputZip).Hash
+        if (@(Get-ChildItem -LiteralPath $source -File -Force -Filter '*.zip').Count -or
+            (Test-Path -LiteralPath (Join-Path $bundle 'application')) -or
+            [IO.File]::ReadAllText((Join-Path $source 'setup.log')) -notmatch 'prepared folder bundle/; no Transfer ZIP was created') {
+            throw 'SETUP must publish a prepared folder without app code or a Transfer ZIP.'
+        }
         $records = Join-Path $source 'bundle-records'
         $provenance = [IO.File]::ReadAllText((Join-Path $records 'provenance.json')) | ConvertFrom-Json
         $locked = Join-Path $records 'uv.lock'
@@ -179,22 +189,31 @@ function New-PreparedTestZip([string]$Scenario) {
             [IO.File]::Copy($locked, (Join-Path $source 'uv.lock'))
             [IO.Directory]::Delete($bundle, $true)
             [IO.Directory]::Delete($records, $true)
-            [IO.File]::Delete($outputZip)
             & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $source 'prepare.ps1') | Out-Host
             if ($LASTEXITCODE -ne 0 -or (Get-FileHash -LiteralPath $manifestPath).Hash -ne $firstManifest -or
-                (Get-FileHash -LiteralPath $outputZip).Hash -ne $zipHash) {
-                throw 'Replaying the saved lock changed the payload or transfer ZIP.'
+                @(Get-ChildItem -LiteralPath $source -File -Force -Filter '*.zip').Count) {
+                throw 'Replaying the saved lock changed the verified payload or created a ZIP.'
             }
             $replayLog = [IO.File]::ReadAllText((Join-Path $source 'setup.log'))
             if ($replayLog -notmatch 'Using supplied uv.lock' -or $replayLog -match 'BEGIN: dependency_lock') {
                 throw 'Replaying the saved lock silently resolved.'
             }
         }
-        if ([IO.File]::ReadAllText((Join-Path $source 'setup.log')) -notmatch ('ZIP SHA-256: ' + $zipHash)) {
-            throw 'SETUP did not report the actual transfer ZIP hash.'
+        # Model the IT specialist assembling the final package after SETUP.
+        Add-TestApplication $bundle $Scenario
+        foreach ($folder in @('input', 'output', 'workings', 'other [local]')) {
+            [IO.Directory]::CreateDirectory((Join-Path $bundle $folder)) | Out-Null
+        }
+        # Include both Unicode filenames and empty directories in the ZIP.
+        foreach ($folder in @('input', 'other [local]')) {
+            [IO.File]::WriteAllText((Join-Path (Join-Path $bundle $folder) $unicodeFixture), "keep $folder", $utf8)
+        }
+        [IO.File]::WriteAllText((Join-Path $bundle 'run-settings.txt'), 'local user file', $utf8)
+        foreach ($name in @('uv.toml', 'pyproject.toml', 'uv.lock', '.python-version')) {
+            [IO.File]::WriteAllText((Join-Path $bundle $name), 'unrelated user file', $utf8)
         }
         $preparedZip = Join-Path $testRoot "$scenario prepared.zip"
-        [IO.File]::Move($outputZip, $preparedZip)
+        [IO.Compression.ZipFile]::CreateFromDirectory($bundle, $preparedZip, [IO.Compression.CompressionLevel]::Optimal, $false)
         # Destroy the input before starting the target. Nothing on the target
         # can silently rely on the online directory or its prepared venv.
         [IO.Directory]::Delete($source, $true)
@@ -227,11 +246,12 @@ try {
         $target = Join-Path $testRoot ("$scenario target " + [char]0x00e9 + ' [literal]')
         [IO.Compression.ZipFile]::ExtractToDirectory($preparedZip, $target)
         $expected = @('START.bat', 'portable-common.ps1', 'portable-python.ps1', 'bundle-manifest.json',
-                      'install-plan.txt', 'runtime')
+                      'install-plan.txt', 'runtime', 'application', 'input', 'output', 'workings', 'other [local]',
+                      'run-settings.txt', 'uv.toml', 'pyproject.toml', 'uv.lock', '.python-version')
         if ($scenario -eq 'wheels') { $expected += 'wheelhouse' }
         $actual = @(Get-ChildItem -LiteralPath $target -Force | ForEach-Object { $_.Name })
         if (Compare-Object $expected $actual -CaseSensitive) {
-            throw 'Transfer ZIP does not match the exact minimal layout.'
+            throw 'Transfer ZIP does not match the reviewed flat layout, including empty project folders.'
         }
         $notices = [IO.File]::ReadAllText((Join-Path $target 'runtime\BUNDLE-LICENSES.txt'))
         if ($notices -notmatch 'Portable Python launcher \(MIT\)' -or
@@ -249,25 +269,21 @@ try {
         $env:UV_INDEX = 'https://invalid.invalid/simple'
         $env:UV_PYTHON_INSTALL_DIR = 'C:\not-the-portable-runtime'
         $env:UV_OFFLINE = 'false'
-        foreach ($folder in @('input', 'output', 'workings', 'other [local]')) {
-            [IO.Directory]::CreateDirectory((Join-Path $target $folder)) | Out-Null
-            [IO.File]::WriteAllText((Join-Path (Join-Path $target $folder) $unicodeFixture), "keep $folder", $utf8)
-        }
-        [IO.File]::WriteAllText((Join-Path $target 'run-settings.txt'), 'local user file', $utf8)
-        foreach ($name in @('uv.toml', 'pyproject.toml', 'uv.lock', '.python-version')) {
-            [IO.File]::WriteAllText((Join-Path $target $name), 'unrelated user file', $utf8)
+        [IO.File]::WriteAllText((Join-Path $target 'input\user-input.txt'), 'added offline', $utf8)
+        $first = Invoke-Target $target 0
+        if ($first -notmatch 'Setup: PERFORMED' -or $first -notmatch 'APPLICATION STATUS: SUCCESS') {
+            throw 'The Transfer ZIP did not run after adding only user input.'
         }
         if ($scenario -eq 'stdlib') {
-            $emptyApp = Invoke-Target $target 20
-            if ($emptyApp -notmatch 'Setup: PERFORMED' -or $emptyApp -notmatch 'Add application' -or
-                (Test-Path -LiteralPath (Join-Path $target 'application'))) {
+            $noApp = Join-Path $testRoot 'missing app'
+            [IO.Compression.ZipFile]::ExtractToDirectory($preparedZip, $noApp)
+            [IO.Directory]::Move((Join-Path $noApp 'application'), (Join-Path $testRoot 'removed app'))
+            $emptyApp = Invoke-Target $noApp 20
+            if ($emptyApp -notmatch 'Setup: PERFORMED' -or $emptyApp -notmatch 'Transfer ZIP is missing application' -or
+                (Test-Path -LiteralPath (Join-Path $noApp 'application'))) {
                 throw 'A missing app did not leave a ready environment and show actionable instructions.'
             }
         }
-        Add-OfflineTestApplication $target $scenario
-        $first = Invoke-Target $target 0
-        $setup = if ($scenario -eq 'stdlib') { 'SKIPPED' } else { 'PERFORMED' }
-        if ($first -notmatch "Setup: $setup" -or $first -notmatch 'APPLICATION STATUS: SUCCESS') { throw 'Missing first app run success.' }
         if ($scenario -eq 'wheels' -and $first -notmatch 'WHEELS AND NESTED IMPORTS SUCCESS') { throw 'Bundled wheels did not import.' }
         [IO.File]::AppendAllText((Join-Path $target 'application\__main__.py'),
             "`nprint('OFFLINE EDIT SUCCESS')`n", $utf8)
@@ -330,7 +346,7 @@ try {
             if ((Invoke-Target $bad 10) -notmatch 'failed SHA-256 verification' -or
                 (Test-Path -LiteralPath (Join-Path $bad '.venv'))) { throw 'Damaged wheel was not rejected before installation.' }
         }
-        foreach ($folder in @('input', 'output', 'workings', 'other [local]')) {
+        foreach ($folder in @('input', 'other [local]')) {
             if ([IO.File]::ReadAllText((Join-Path (Join-Path $target $folder) $unicodeFixture)) -ne "keep $folder") {
                 throw "User data changed: $folder"
             }

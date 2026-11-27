@@ -35,6 +35,6 @@ jobs:
         run: python scripts/build.py --profile preloaded
       - name: Check wheel tag prefilter
         run: python -B tests/wheel-tags.py
-      - name: Prepare, repackage, and launch offline from a different path
+      - name: Prepare, add app before packaging, and launch offline from a different path
         shell: powershell
-        run: ./tests/preloaded.ps1 -Zip ./dist/portable-python-preloaded-0.1.6-windows-x86_64.zip -BlockNetwork
+        run: ./tests/preloaded.ps1 -Zip ./dist/portable-python-preloaded-0.1.7-windows-x86_64.zip -BlockNetwork

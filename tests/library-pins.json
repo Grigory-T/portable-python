@@ -8,7 +8,9 @@
     "more-itertools": "11.2.1"
   },
   "preloaded": {
-    "python-calamine": "0.9.1"
+    "polars": "2.2.0",
+    "python-calamine": "0.9.0",
+    "xlsxwriter": "3.3.4"
   },
   "notebook": {
     "jupyterlab": "4.6.4",

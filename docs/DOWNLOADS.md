@@ -162,7 +162,7 @@ downloads matching wheels from the locked `files.pythonhosted.org/packages/`
 URLs without redirects and checks each locked SHA-256. `setup.log` stays in
 the starter directory and shows the steps and failures. The exact artifact
 URLs and verified hashes are in `bundle-records/provenance.json` alongside
-the saved TOML and lock on the setup machine, not in the transfer ZIP.
+the saved TOML and lock on the online setup machine, not in the Transfer ZIP.
 PyPI resolution metadata is HTTPS-protected, not independently pinned.
 
 The default archives were verified against signed upstream GitHub release
@@ -175,7 +175,8 @@ gh release verify-asset 20261124 cpython-3.15.2+20261124-x86_64-pc-windows-msvc-
 ```
 
 These are archive attestations, not a claim that each executable or wheel is
-code-signed. For a prepared ZIP, authenticate its SHA-256 through a trusted
+code-signed. After IT packages the prepared folder with the application,
+authenticate the final Transfer ZIP's SHA-256 through a trusted
 channel before extraction. The manifest is not an independent signature.
 
 START contains no downloader. It uses the bundle runtime and a local flat

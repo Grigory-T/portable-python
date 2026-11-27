@@ -110,11 +110,10 @@ try {
     [IO.File]::WriteAllText($logPath, '', $Utf8)
     $setupLog = $logPath
     $destination = Join-Path $Root 'bundle'
-    $destinationZip = Join-Path $Root 'prepared-app.zip'
     $destinationRecords = Join-Path $Root 'bundle-records'
-    foreach ($output in @($destination, $destinationRecords, $destinationZip)) {
+    foreach ($output in @($destination, $destinationRecords)) {
         if (Test-Path -LiteralPath $output) {
-            throw 'A SETUP output already exists. Move bundle/, bundle-records/ and prepared-app.zip aside or use a fresh starter folder.'
+            throw 'A SETUP output already exists. Use a fresh starter folder or move bundle/ and bundle-records/ aside.'
         }
     }
     if (@(Get-ChildItem -LiteralPath $Root -Directory -Force -Filter '.prepare-*').Count) {
@@ -197,6 +196,7 @@ try {
     [IO.Directory]::CreateDirectory($releaseFolder) | Out-Null
     $downloads += Save-VerifiedDownload $pythonUrl (Join-Path $releaseFolder $pythonFile) $pins['python-archive-sha256'] $pythonFile
     $installDir = Join-Path $work 'python'
+    Write-SetupNote 'Installing CPython from the verified local archive. uv may say "Downloading" while reading this local file; no network is used in this step.'
     Invoke-SetupStep 'python_install_from_verified_archive' $uv @(
         '--offline', '--no-config', 'python', 'install', $request,
         '--mirror', ([uri]::new($mirror).AbsoluteUri), '--install-dir', $installDir, '--no-bin', '--no-registry'
@@ -246,18 +246,13 @@ try {
     Write-SetupNote 'PASS: trial offline installation'
     Invoke-SetupStep 'manifest' $python ($pythonFlags + @('manifest', $bundle, $inventory, $pythonVersion, $uvVersion))
 
-    $stagedZip = Join-Path $stage 'prepared-app.zip'
-    Invoke-SetupStep 'transfer_zip' $python ($pythonFlags + @('zip', $bundle, $stagedZip))
-    $zipHash = Get-Hash $stagedZip
     Set-Location -LiteralPath $Root
     Remove-PreparationScratch $work
     [IO.Directory]::Move($bundle, $destination)
     [IO.Directory]::Move($records, $destinationRecords)
-    [IO.File]::Move($stagedZip, $destinationZip)
-    Write-SetupNote 'Transfer artifact: prepared-app.zip'
-    Write-SetupNote "ZIP SHA-256: $zipHash"
-    Write-SetupNote 'Online build records: bundle-records/'
-    Write-SetupNote 'PREPARATION SUCCESS: transfer prepared-app.zip, not the starter folder.'
+    Write-SetupNote 'PREPARATION SUCCESS: prepared folder bundle/; no Transfer ZIP was created.'
+    Write-SetupNote 'Review bundle/, add application/, input/, workings/ and output/, then ZIP the contents with START.bat at the root.'
+    Write-SetupNote 'Keep setup.log and bundle-records/ on the online setup machine.'
     $code = 0
 } catch {
     $problem = $_.Exception.Message

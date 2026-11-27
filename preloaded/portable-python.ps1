@@ -47,7 +47,7 @@ try {
     [Console]::OutputEncoding = $Utf8
     Assert-LocalWindows $Root
     if (-not [IO.File]::Exists($manifest)) {
-        throw 'No prepared bundle found. On the online setup machine, run SETUP.bat and transfer the generated prepared-app.zip.'
+        throw 'No prepared bundle found. Extract the Transfer ZIP, not the Starter ZIP. On the online setup machine, run SETUP.bat, add the application to bundle/, then ZIP its contents.'
     }
     foreach ($path in @($state, $venv, $ready, $manifest, $runtime, (Join-Path $Root 'runtime'))) {
         if (Test-Path -LiteralPath $path) { Assert-NotLinked (Get-Item -LiteralPath $path -Force) }
@@ -74,7 +74,7 @@ try {
         }
         $setup = 'SKIPPED'
     } else {
-        Write-Host 'Please wait: verifying the bundle and installing its wheels offline...'
+        Write-Host 'First START or rebuild: verifying the prepared environment and creating .venv from local files. No downloads.'
         Verify-Bundle $record
         if ([IO.File]::Exists($ready)) { [IO.File]::Delete($ready) }
         Initialize-OfflineVenv $Root $venv
@@ -98,7 +98,7 @@ try {
     foreach ($name in @('__main__.py', '__init__.py')) {
         $file = Join-Path $app $name
         if (-not [IO.File]::Exists($file)) {
-            throw "Add application\$name and run START.bat again. The offline Python environment is ready."
+            throw "The Transfer ZIP is missing application\$name. Ask the IT specialist for the complete Transfer ZIP. The offline Python environment is ready."
         }
         Assert-NotLinked (Get-Item -LiteralPath $file -Force)
     }
