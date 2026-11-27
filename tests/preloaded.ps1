@@ -121,6 +121,57 @@ function Read-TestSetupLog([string]$Source, [bool]$Success) {
     return $log
 }
 
+function Get-PreparedSnapshot([string]$Source) {
+    $epoch = [DateTime]::new(2000, 1, 1, 0, 0, 0, [DateTimeKind]::Utc)
+    $snapshot = foreach ($name in @('bundle', 'bundle-records')) {
+        $folder = Get-Item -LiteralPath (Join-Path $Source $name)
+        foreach ($item in (@($folder) + @(Get-ChildItem -LiteralPath $folder.FullName -Recurse -Force))) {
+            $relative = $item.FullName.Substring($Source.Length + 1).Replace('\', '/')
+            $upstream = $relative -match '^bundle/runtime(/|$)' -and
+                        $relative -notin @('bundle/runtime/uv.exe', 'bundle/runtime/BUNDLE-LICENSES.txt')
+            if (-not $upstream -and $item.LastWriteTimeUtc -ne $epoch) {
+                throw "Prepared output has a non-canonical modification time: $relative"
+            }
+            if ($item.PSIsContainer) {
+                "directory $relative"
+            } else {
+                "file $relative $((Get-FileHash -LiteralPath $item.FullName).Hash)"
+            }
+        }
+    }
+    return $snapshot
+}
+
+function Confirm-ReproducibleSetup([string]$Source, [string]$OriginalLog) {
+    $expected = @(Get-PreparedSnapshot $Source)
+    foreach ($replay in @($false, $true)) {
+        $variant = if ($replay) { 'saved lock replay' } else { 'fresh resolution' }
+        $fresh = Join-Path $testRoot ($variant + ' ' + [char]0x00e9 + ' [literal]')
+        [IO.Compression.ZipFile]::ExtractToDirectory($starterZip, $fresh)
+        [IO.File]::Copy((Join-Path $Source 'bundle-records\pyproject.toml'), (Join-Path $fresh 'pyproject.toml'), $true)
+        if ($replay) {
+            [IO.File]::Copy((Join-Path $Source 'bundle-records\uv.lock'), (Join-Path $fresh 'uv.lock'))
+        }
+        & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $fresh 'prepare.ps1') | Out-Host
+        if ($LASTEXITCODE -ne 0) { throw "SETUP failed during $variant." }
+        $log = Read-TestSetupLog $fresh $true
+        $resolved = $log -match '\| Resolve dependency lock \|'
+        if ($resolved -eq $replay -or ($replay -and $log -notmatch 'Using supplied uv.lock unchanged')) {
+            throw "Unexpected dependency resolution behavior during $variant."
+        }
+        # Logs deliberately retain real run times. Compare the named output
+        # trees, including every byte of the lock, provenance and payload.
+        $actual = @(Get-PreparedSnapshot $fresh)
+        $changes = @(Compare-Object $expected $actual -CaseSensitive)
+        if ($changes.Count) {
+            throw "SETUP changed $($changes.Count) output entries during ${variant}: $($changes[0].InputObject)"
+        }
+        if ($log -ceq $OriginalLog) { throw "SETUP did not record a fresh execution log during $variant." }
+        [IO.Directory]::Delete($fresh, $true)
+        Write-Host "REPRODUCIBLE SETUP: $variant matched $($actual.Count) file and directory entries."
+    }
+}
+
 function New-PreparedTestZip([string]$Scenario) {
         $source = Join-Path $testRoot "$scenario online"
         if ($scenario -eq 'wheels') { $source += 'x' * (125 - $source.Length) }
@@ -183,7 +234,7 @@ function New-PreparedTestZip([string]$Scenario) {
         $phases = @('Preflight', 'uv and license downloads', 'Verify and inspect uv', 'CPython archive download',
                     'Install CPython locally', 'Validate project settings', 'Resolve dependency lock',
                     'Export offline install plan', 'Wheel downloads', 'Trial offline installation',
-                    'Write bundle manifest', 'Publish prepared folder')
+                    'Write bundle manifest', 'Normalize output timestamps', 'Publish prepared folder')
         $observed = @($setupLog -split "`n" | ForEach-Object {
             if ($_ -match '\| INFO \| ([^|]+) \| BEGIN \(') { $Matches[1] }
         })
@@ -200,11 +251,14 @@ function New-PreparedTestZip([string]$Scenario) {
         $records = Join-Path $source 'bundle-records'
         $provenance = [IO.File]::ReadAllText((Join-Path $records 'provenance.json')) | ConvertFrom-Json
         $locked = Join-Path $records 'uv.lock'
+        $manifestHash = (Get-FileHash -LiteralPath (Join-Path $bundle 'bundle-manifest.json')).Hash.ToLowerInvariant()
         if ($provenance.uv_lock_sha256 -ne (Get-FileHash -LiteralPath $locked).Hash -or
+            $provenance.pyproject_sha256 -ne (Get-FileHash -LiteralPath (Join-Path $source 'pyproject.toml')).Hash -or
             $provenance.uv_exe_sha256 -ne (Get-FileHash -LiteralPath (Join-Path $bundle 'runtime\uv.exe')).Hash -or
             (Get-FileHash -LiteralPath (Join-Path $source 'pyproject.toml')).Hash -ne
                 (Get-FileHash -LiteralPath (Join-Path $records 'pyproject.toml')).Hash -or
-            @($provenance.downloads | Where-Object { $_.url -notmatch '^https://' -or $_.sha256 -notmatch '^[a-f0-9]{64}$' }).Count) {
+            @($provenance.downloads | Where-Object { $_.url -notmatch '^https://' -or $_.sha256 -notmatch '^[a-f0-9]{64}$' }).Count -or
+            -not $setupLog.Contains("bundle-manifest.json SHA-256: $manifestHash")) {
             throw 'Bundle provenance is incomplete or inconsistent.'
         }
         $wheels = @()
@@ -230,20 +284,7 @@ function New-PreparedTestZip([string]$Scenario) {
             }
         }
         if ($scenario -eq 'wheels' -and -not $ExportBundle) {
-            $manifestPath = Join-Path $bundle 'bundle-manifest.json'
-            $firstManifest = (Get-FileHash -LiteralPath $manifestPath).Hash
-            [IO.File]::Copy($locked, (Join-Path $source 'uv.lock'))
-            [IO.Directory]::Delete($bundle, $true)
-            [IO.Directory]::Delete($records, $true)
-            & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $source 'prepare.ps1') | Out-Host
-            if ($LASTEXITCODE -ne 0 -or (Get-FileHash -LiteralPath $manifestPath).Hash -ne $firstManifest -or
-                @(Get-ChildItem -LiteralPath $source -File -Force -Filter '*.zip').Count) {
-                throw 'Replaying the saved lock changed the verified payload or created a ZIP.'
-            }
-            $replayLog = Read-TestSetupLog $source $true
-            if ($replayLog -notmatch 'Using supplied uv.lock unchanged' -or $replayLog -match '\| Resolve dependency lock \|') {
-                throw 'Replaying the saved lock silently resolved.'
-            }
+            Confirm-ReproducibleSetup $source $setupLog
         }
         # Model the IT specialist assembling the final package after SETUP.
         Add-TestApplication $bundle $Scenario

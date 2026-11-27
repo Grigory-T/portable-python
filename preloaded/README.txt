@@ -75,11 +75,23 @@ SETUP omits recognized local paths, URL credentials and query values where
 possible. Keep the log on the online setup machine and review before sharing.
 SETUP will not overwrite existing bundle/ or bundle-records/.
 
-To reproduce the prepared payload, use the same starter and pyproject.toml
-in a fresh folder. Copy a trusted bundle-records/uv.lock next to
-SETUP.bat before starting. SETUP checks and keeps that lock, never silently
-resolving again. This reproduces the prepared environment, not necessarily
-the exact bytes of a manually created Transfer ZIP.
+To reproduce SETUP, use the same Starter ZIP and identical pyproject.toml
+in a fresh folder on a compatible online setup machine. Copy the saved
+bundle-records/uv.lock next to SETUP.bat before starting. SETUP preserves the
+supplied lock byte for byte, checks pinned downloads and fails if a required
+artifact is unavailable or no longer matches. Without a supplied lock, the
+pinned uv resolves the highest compatible versions from current PyPI metadata;
+the result is repeatable under the same metadata and environment, not frozen
+against later PyPI changes.
+
+Compare bundle-manifest.json SHA-256 in setup.log to identify the prepared
+environment. The reproducible output is the relative file layout and bytes
+under bundle/ and bundle-records/. SETUP sets generated output modification
+times to 2000-01-01 00:00:00 UTC; it leaves CPython's bundled file times
+untouched because its precompiled bytecode can depend on those times.
+setup.log keeps real timestamps, paths are not part of the fingerprint,
+and filesystem creation times and the manually created Transfer ZIP are
+not guaranteed to match.
 
 After SETUP succeeds, the IT specialist:
 

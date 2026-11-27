@@ -173,11 +173,14 @@ try {
         [IO.File]::Copy($source.FullName, (Join-Path $bundle $name))
     }
     [IO.File]::Copy($project, (Join-Path $records 'pyproject.toml'))
+    $projectHash = Get-Hash (Join-Path $records 'pyproject.toml')
+    Write-SetupNote "pyproject.toml SHA-256: $projectHash"
     $sourceLock = Join-Path $Root 'uv.lock'
     $reuseLock = Test-Path -LiteralPath $sourceLock
     if ($reuseLock) {
         Assert-NotLinked (Get-Item -LiteralPath $sourceLock -Force)
         [IO.File]::Copy($sourceLock, (Join-Path $records 'uv.lock'))
+        $suppliedLockHash = Get-Hash (Join-Path $records 'uv.lock')
         Write-SetupNote 'Using supplied uv.lock unchanged; a stale lock fails instead of triggering resolution.'
     } else {
         Write-SetupNote 'No uv.lock supplied; one will be resolved from PyPI on the online setup machine.'
@@ -261,13 +264,14 @@ try {
     if (-not $reuseLock) {
         Start-SetupPhase 'Resolve dependency lock' 'internet metadata'
         Write-SetupNote "PyPI index: $index. uv may also read package metadata from files.pythonhosted.org. TLS uses system trust; metadata is not hash-pinned. No source builds or Python downloads."
+        Write-SetupNote 'Resolution policy: highest compatible versions, using the pinned uv version. Save the generated uv.lock for replay.'
         Write-SetupNote 'uv may read metadata for other platforms. Only compatible Windows x86-64 or platform-independent wheels are bundled in the wheel download phase.'
         $previousRustLog = $env:RUST_LOG
         try {
             # Request/cache diagnostics, not verbose HTTP header or credential tracing.
             $env:RUST_LOG = 'warn,uv_client::cached_client=debug'
             Invoke-SetupCommand 'dependency_lock' $uv ($flags + @(
-                'lock', '--project', $records, '--python', $python, '--no-sources', '--no-build', '--default-index', $index
+                'lock', '--project', $records, '--python', $python, '--no-sources', '--no-build', '--resolution', 'highest', '--default-index', $index
             ))
         } finally { $env:RUST_LOG = $previousRustLog }
         Complete-SetupPhase
@@ -279,6 +283,9 @@ try {
         '--output-file', (Join-Path $bundle 'install-plan.txt'), '--quiet'
     ))
     $lockHash = Get-Hash (Join-Path $records 'uv.lock')
+    if ($reuseLock -and $lockHash -cne $suppliedLockHash) {
+        throw 'The supplied uv.lock changed during export.'
+    }
     Write-SetupNote "uv.lock SHA-256: $lockHash; exported hashed requirements to install-plan.txt."
     Complete-SetupPhase
     Start-SetupPhase 'Wheel downloads' 'internet if wheels are needed'
@@ -289,6 +296,7 @@ try {
         uv = $uvVersion
         uv_exe_sha256 = $pins['uv-exe-sha256']
         index = $index
+        pyproject_sha256 = $projectHash
         uv_lock_sha256 = $lockHash
         downloads = $downloads
     }
@@ -309,6 +317,11 @@ try {
     Complete-SetupPhase
     Start-SetupPhase 'Write bundle manifest'
     Invoke-SetupCommand 'manifest' $python ($pythonFlags + @('manifest', $bundle, $inventory, $pythonVersion, $uvVersion))
+    $manifestHash = Get-Hash (Join-Path $bundle 'bundle-manifest.json')
+    Write-SetupNote "bundle-manifest.json SHA-256: $manifestHash (prepared environment fingerprint, not a Transfer ZIP hash)."
+    Complete-SetupPhase
+    Start-SetupPhase 'Normalize output timestamps'
+    Invoke-SetupCommand 'normalize_timestamps' $python ($pythonFlags + @('normalize', $bundle, $records))
     Complete-SetupPhase
 
     Start-SetupPhase 'Publish prepared folder'

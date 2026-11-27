@@ -22,7 +22,7 @@ can take several minutes; unchanged later starts skip package setup.
 |---|---|---|
 | `portable-python-one-launcher-0.1.5-windows-x86_64.zip` | Ordinary Python application | `application/`; entry point `__main__.py` |
 | `portable-python-jupyterlab-0.1.4-windows-x86_64.zip` | Interactive notebooks | `notebooks/`; create or copy `.ipynb` files |
-| `portable-python-preloaded-0.1.8-windows-x86_64.zip` | Prepare a self-contained Python environment for an offline target | `application/` in the prepared folder on the online setup machine |
+| `portable-python-preloaded-0.1.9-windows-x86_64.zip` | Prepare a self-contained Python environment for an offline target | `application/` in the prepared folder on the online setup machine |
 
 The online editions are usable immediately. The application examples use only the standard
 library. The notebook example checks its actual interpreter and directory.
@@ -75,6 +75,9 @@ downloads and installs its own runtime and wheels in both cases.
 
 Keep the prepared environment files unchanged. Code-only updates can be
 repackaged without SETUP; Python or dependency changes need fresh preparation.
+To reproduce a preparation, use the same Starter ZIP and TOML with the saved
+`uv.lock`; compare the `bundle-manifest.json` hash in `setup.log`. The
+manually created Transfer ZIP has its own hash.
 If the environment is damaged, move only `.venv` out of the project folder
 and rerun START to rebuild offline. Keep target networking blocked by policy
 if the application itself must not use it. See [the included guide](preloaded/README.txt).

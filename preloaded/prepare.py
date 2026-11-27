@@ -2,12 +2,18 @@
 
 import hashlib
 import json
+import os
 from pathlib import Path
 import re
 import sys
 import tomllib
 from urllib.parse import unquote, urlsplit
 from urllib.request import build_opener, HTTPRedirectHandler
+
+
+def write_json(path, data):
+    """Stable UTF-8 bytes, independent of dictionary order or host newlines."""
+    path.write_text(json.dumps(data, indent=2, sort_keys=True) + "\n", encoding="utf-8", newline="\n")
 
 
 def read_toml(path):
@@ -134,26 +140,43 @@ def download_wheels(bundle, records, version):
         provenance["downloads"].append(
             dict(file=f"wheelhouse/{name}", url=url, sha256=actual, verification="uv.lock SHA-256")
         )
-    provenance_path.write_text(json.dumps(provenance, indent=2) + "\n", encoding="utf-8")
+    write_json(provenance_path, provenance)
     print(f"Verified wheel files: {len(wheels)}")
 
 
 def write_manifest(bundle, inventory, python, uv):
     files = {}
-    for path in sorted(bundle.rglob("*")):
+    for path in bundle.rglob("*"):
         if path.is_file():
             with path.open("rb") as stream:
                 files[path.relative_to(bundle).as_posix()] = hashlib.file_digest(stream, "sha256").hexdigest()
-    (bundle / "bundle-manifest.json").write_text(
-        json.dumps({
+    write_json(
+        bundle / "bundle-manifest.json",
+        {
             "schema": 4,
             "python": python,
             "uv": uv,
             "installed_packages": Path(inventory).read_text(encoding="utf-8").splitlines(),
             "sha256": files,
-        }, indent=2, ensure_ascii=True) + "\n", encoding="utf-8"
+        },
     )
     print(f"bundle-manifest.json records SHA-256 for {len(files)} prepared environment files.")
+
+
+def normalize_outputs(bundle, records):
+    """Set generated file mtimes without rewriting upstream CPython timestamps."""
+    records = Path(records)
+    paths = [p for p in bundle.iterdir() if p.is_file()]
+    paths.extend(records.iterdir())
+    wheelhouse = bundle / "wheelhouse"
+    if wheelhouse.is_dir():
+        paths.extend(wheelhouse.iterdir())
+        paths.append(wheelhouse)
+    paths.extend((bundle / "runtime/uv.exe", bundle / "runtime/BUNDLE-LICENSES.txt", bundle, records))
+    epoch = 946684800  # 2000-01-01 00:00:00 UTC
+    for path in paths:
+        os.utime(path, (epoch, epoch))
+    print("Set prepared output modification times to 2000-01-01 00:00:00 UTC; upstream CPython times unchanged.")
 
 
 if __name__ == "__main__":
@@ -164,5 +187,7 @@ if __name__ == "__main__":
         download_wheels(Path(path), *args)
     elif mode == "manifest":
         write_manifest(Path(path), *args)
+    elif mode == "normalize":
+        normalize_outputs(Path(path), *args)
     else:
         raise SystemExit("Unknown preparation operation")

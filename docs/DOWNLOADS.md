@@ -168,6 +168,10 @@ values and userinfo are redacted where recognized; review before sharing.
 The exact artifact URLs and verified hashes are in
 `bundle-records/provenance.json` alongside the saved TOML and lock.
 Both records stay on the online setup machine, not in the Transfer ZIP.
+Keep the same Starter ZIP, TOML and lock for a reproducible preparation.
+The lock pins choices and artifacts, not their future availability; missing
+or altered artifacts fail. The manifest hash logged by SETUP identifies the
+prepared environment independently of the manually packaged Transfer ZIP.
 
 The default archives were verified against signed upstream GitHub release
 attestations during pin review. Maintainers may repeat the checks on downloaded
