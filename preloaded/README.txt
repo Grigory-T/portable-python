@@ -89,9 +89,9 @@ environment. The reproducible output is the relative file layout and bytes
 under bundle/ and bundle-records/. SETUP sets generated output modification
 times to 2000-01-01 00:00:00 UTC; it leaves CPython's bundled file times
 untouched because its precompiled bytecode can depend on those times.
-setup.log keeps real timestamps, paths are not part of the fingerprint,
-and filesystem creation times and the manually created Transfer ZIP are
-not guaranteed to match.
+setup.log keeps real timestamps. The fingerprint includes relative file
+paths, not the absolute folder used for SETUP. Filesystem creation times
+and the manually created Transfer ZIP are not guaranteed to match.
 
 After SETUP succeeds, the IT specialist:
 
