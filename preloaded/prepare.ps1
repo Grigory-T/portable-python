@@ -261,6 +261,7 @@ try {
     if (-not $reuseLock) {
         Start-SetupPhase 'Resolve dependency lock' 'internet metadata'
         Write-SetupNote "PyPI index: $index. uv may also read package metadata from files.pythonhosted.org. TLS uses system trust; metadata is not hash-pinned. No source builds or Python downloads."
+        Write-SetupNote 'uv may read metadata for other platforms. Only compatible Windows x86-64 or platform-independent wheels are bundled in the wheel download phase.'
         $previousRustLog = $env:RUST_LOG
         try {
             # Request/cache diagnostics, not verbose HTTP header or credential tracing.
@@ -280,7 +281,7 @@ try {
     $lockHash = Get-Hash (Join-Path $records 'uv.lock')
     Write-SetupNote "uv.lock SHA-256: $lockHash; exported hashed requirements to install-plan.txt."
     Complete-SetupPhase
-    Start-SetupPhase 'Wheel downloads' 'internet'
+    Start-SetupPhase 'Wheel downloads' 'internet if wheels are needed'
     Write-SetupNote 'Only locked HTTPS wheel URLs on files.pythonhosted.org/packages/ are allowed. Redirects are rejected; each wheel must match its uv.lock SHA-256.'
     $provenance = [ordered]@{
         schema = 1

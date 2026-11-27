@@ -67,7 +67,8 @@ For example:
 For artifact downloads, the log shows the request URL, HTTP response or
 redirect, byte count and verified SHA-256. PyPI metadata resolution is a
 separate phase with uv request/cache diagnostics; it is not a packet capture
-or a hash check of PyPI metadata. A supplied uv.lock skips resolution.
+or a hash check of PyPI metadata. It may read metadata for other platforms;
+those wheels are not bundled. A supplied uv.lock skips resolution.
 Unexpected artifact origins, mismatched hashes and failed checks stop SETUP.
 bundle-records/provenance.json records verified artifact URLs and hashes.
 SETUP omits recognized local paths, URL credentials and query values where
