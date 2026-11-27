@@ -159,11 +159,15 @@ as the files. uv extracts the checked CPython archive from a temporary local
 uv resolves through PyPI (or uses a trusted `uv.lock` provided beside
 `SETUP.bat`). The bundled CPython's standard-library HTTPS client
 downloads matching wheels from the locked `files.pythonhosted.org/packages/`
-URLs without redirects and checks each locked SHA-256. `setup.log` stays in
-the starter directory and shows the steps and failures. The exact artifact
-URLs and verified hashes are in `bundle-records/provenance.json` alongside
-the saved TOML and lock on the online setup machine, not in the Transfer ZIP.
-PyPI resolution metadata is HTTPS-protected, not independently pinned.
+URLs without redirects and checks each locked SHA-256. `setup.log` records
+UTC timestamps, phases and elapsed time, artifact GETs, HTTP responses,
+byte counts and SHA-256 results. PyPI resolution logs uv's request/cache
+diagnostics separately; metadata is HTTPS-protected, not independently
+pinned, and these diagnostics are not a proxy or packet trace. URL query
+values and userinfo are redacted where recognized; review before sharing.
+The exact artifact URLs and verified hashes are in
+`bundle-records/provenance.json` alongside the saved TOML and lock.
+Both records stay on the online setup machine, not in the Transfer ZIP.
 
 The default archives were verified against signed upstream GitHub release
 attestations during pin review. Maintainers may repeat the checks on downloaded

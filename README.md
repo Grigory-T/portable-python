@@ -22,7 +22,7 @@ can take several minutes; unchanged later starts skip package setup.
 |---|---|---|
 | `portable-python-one-launcher-0.1.5-windows-x86_64.zip` | Ordinary Python application | `application/`; entry point `__main__.py` |
 | `portable-python-jupyterlab-0.1.4-windows-x86_64.zip` | Interactive notebooks | `notebooks/`; create or copy `.ipynb` files |
-| `portable-python-preloaded-0.1.7-windows-x86_64.zip` | Prepare a self-contained Python environment for an offline target | `application/` in the prepared folder on the online setup machine |
+| `portable-python-preloaded-0.1.8-windows-x86_64.zip` | Prepare a self-contained Python environment for an offline target | `application/` in the prepared folder on the online setup machine |
 
 The online editions are usable immediately. The application examples use only the standard
 library. The notebook example checks its actual interpreter and directory.
@@ -165,9 +165,11 @@ TOML, stop its server, then START again. If the browser does not open, copy the
 
 All distinguish setup failure (overall code `10`) from app/server failure
 (`20`), with `0` success and `30` launcher failure. Local JSONL journals record
-infrastructure diagnostics in the online profiles. Preloaded records
-preparation and the ZIP hash in `setup.log` on the setup machine; its target
-diagnostics stay in the console. Application output is not journaled.
+infrastructure diagnostics in the online profiles. Preloaded's `setup.log`
+records timed preparation phases, download receipts and failures on the
+online setup machine. IT computes the Transfer ZIP hash after packaging.
+Offline target diagnostics stay in the console. Application output is not
+journaled.
 
 ## UTF-8 output
 

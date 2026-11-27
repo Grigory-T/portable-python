@@ -47,7 +47,7 @@ def check_profile(name, files):
     project = metadata["project"]
     preloaded = name == "preloaded"
     application = name != "jupyterlab"
-    assert project["version"] == {"preloaded": "0.1.7", "python": "0.1.5", "jupyterlab": "0.1.4"}[name]
+    assert project["version"] == {"preloaded": "0.1.8", "python": "0.1.5", "jupyterlab": "0.1.4"}[name]
     assert project["requires-python"] == ("==3.15.2" if application else "==3.13.18")
     assert project["dependencies"] == []
     assert metadata["tool"]["uv"]["required-version"] == ("==0.13.10" if application else f"=={UV_VERSION}")

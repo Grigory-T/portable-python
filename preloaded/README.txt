@@ -56,9 +56,22 @@ provenance.json. Those are online build records, not required on the target.
 Temporary files stay under the extracted Starter ZIP, not Windows Temp.
 Only one SETUP can run in a starter folder at a time. The empty
 .prepare.lock file is not part of the bundle and may remain between runs.
-Read setup.log in the starter for the latest attempt's steps and errors,
-and bundle-records/provenance.json for each verified download's URL and SHA-256.
-Unexpected origins, mismatched hashes and failed checks stop SETUP.
+Review setup.log in the extracted Starter ZIP folder. It records the latest
+SETUP attempt that acquired the workspace lock, with UTC timestamps, phase
+names, durations and a final result. Read BEGIN and PASS to follow the main
+steps; DETAIL contains tool output, and ERROR identifies the failed phase.
+For example:
+
+    2026-11-27 12:34:56.789 UTC | INFO | Install CPython locally | BEGIN (local)
+
+For artifact downloads, the log shows the request URL, HTTP response or
+redirect, byte count and verified SHA-256. PyPI metadata resolution is a
+separate phase with uv request/cache diagnostics; it is not a packet capture
+or a hash check of PyPI metadata. A supplied uv.lock skips resolution.
+Unexpected artifact origins, mismatched hashes and failed checks stop SETUP.
+bundle-records/provenance.json records verified artifact URLs and hashes.
+SETUP omits recognized local paths, URL credentials and query values where
+possible. Keep the log on the online setup machine and review before sharing.
 SETUP will not overwrite existing bundle/ or bundle-records/.
 
 To reproduce the prepared payload, use the same starter and pyproject.toml

@@ -8,6 +8,9 @@ $originalLocation = Get-Location
 $stage = $null
 $setupLock = $null
 $setupLog = $null
+$setupPhase = 'Preflight'
+$setupTimer = [Diagnostics.Stopwatch]::StartNew()
+$phaseTimer = [Diagnostics.Stopwatch]::new()
 $code = 10
 
 function Read-Pins([string]$Path) {
@@ -36,20 +39,40 @@ function Read-Pins([string]$Path) {
     return $pins
 }
 
-function Write-SetupNote([string]$Message) {
-    $text = $Message.Replace($Root, '<starter>').Replace($env:USERPROFILE, '<profile>')
-    $text = $text -replace '(?i)(https?://)[^\s/@]+@', '$1<redacted>@'
-    $text = ($text -replace '(?i)(https?://[^?\s]+)\?[^\s]+', '$1?<redacted>') -replace '[\x00-\x1F\x7F]', ' '
-    Write-Host $text
-    if ($null -ne $setupLog) {
-        [IO.File]::AppendAllText($setupLog, ([DateTime]::UtcNow.ToString('o') + ' ' + $text + [Environment]::NewLine), $Utf8)
+function Write-SetupNote([string]$Message, [string]$Level = 'INFO') {
+    $text = $Message
+    foreach ($entry in @(@($Root, '<starter>'), @($env:USERPROFILE, '<profile>'))) {
+        $path, $replacement = $entry
+        if ($path) {
+            $text = ($text -ireplace [regex]::Escape($path), $replacement) -ireplace [regex]::Escape($path.Replace('\', '/')), $replacement
+        }
     }
+    $text = $text -replace '(?i)(https?://)[^\s/@]+@', '$1<redacted>@'
+    $text = ($text -replace '(?i)(https?://[^?#\s]+)[?#][^\s]*', '$1?<redacted>') -replace '[\x00-\x1F\x7F-\x9F]', ' '
+    if (-not $text.Trim()) { return }
+    if ($null -ne $setupLog) {
+        $stamp = [DateTime]::UtcNow.ToString("yyyy-MM-dd HH:mm:ss.fff 'UTC'", [Globalization.CultureInfo]::InvariantCulture)
+        [IO.File]::AppendAllText($setupLog, "$stamp | $Level | $setupPhase | $text" + [Environment]::NewLine, $Utf8)
+    }
+    Write-Host "[$setupPhase] $text"
 }
 
-function Invoke-SetupStep([string]$Step, [string]$Exe, [string[]]$Arguments) {
-    Write-SetupNote "BEGIN: $Step"
-    Invoke-Checked $Step $Exe $Arguments 6>&1 | ForEach-Object { Write-SetupNote ([string]$_) }
-    Write-SetupNote "PASS: $Step"
+function Format-Duration([Diagnostics.Stopwatch]$Timer) {
+    return $Timer.Elapsed.ToString('hh\:mm\:ss\.fff', [Globalization.CultureInfo]::InvariantCulture)
+}
+
+function Start-SetupPhase([string]$Name, [string]$Mode = 'local') {
+    $script:setupPhase = $Name
+    $phaseTimer.Restart()
+    Write-SetupNote "BEGIN ($Mode)"
+}
+
+function Complete-SetupPhase {
+    Write-SetupNote "PASS (elapsed $(Format-Duration $phaseTimer))"
+}
+
+function Invoke-SetupCommand([string]$Step, [string]$Exe, [string[]]$Arguments) {
+    Invoke-Checked $Step $Exe $Arguments 6>&1 | ForEach-Object { Write-SetupNote ([string]$_) 'DETAIL' }
 }
 
 function Save-VerifiedDownload([uri]$Source, [string]$Destination, [string]$ExpectedHash, [string]$Artifact) {
@@ -58,9 +81,10 @@ function Save-VerifiedDownload([uri]$Source, [string]$Destination, [string]$Expe
     $hosts = @('releases.astral.sh', 'raw.githubusercontent.com', 'github.com', 'release-assets.githubusercontent.com')
     for ($hop = 0; $hop -lt 6; $hop++) {
         if (-not $uri.IsAbsoluteUri -or $uri.Scheme -cne 'https' -or $uri.Port -ne 443 -or $uri.UserInfo -or $uri.Host -notin $hosts) {
-            throw "Unapproved download destination for $Artifact."
+            $origin = if ($uri.IsAbsoluteUri) { "$($uri.Scheme)://$($uri.Host):$($uri.Port)" } else { '<relative URL>' }
+            throw "Blocked unapproved download destination for ${Artifact}: $origin. No request was sent to it."
         }
-        Write-SetupNote "GET: $($uri.GetLeftPart([UriPartial]::Path))"
+        Write-SetupNote "GET: $($uri.GetLeftPart([UriPartial]::Path)) ($Artifact)"
         $request = [Net.WebRequest]::CreateHttp($uri)
         $request.AllowAutoRedirect = $false
         $request.Timeout = 60000
@@ -71,6 +95,7 @@ function Save-VerifiedDownload([uri]$Source, [string]$Destination, [string]$Expe
         try {
             $status = [int]$response.StatusCode
             if ($status -in @(301,302,303,307,308)) {
+                Write-SetupNote "HTTP $status redirect for $Artifact; next URL must pass the HTTPS allowlist."
                 $location = $response.Headers['Location']
                 if (-not $location) { throw "Redirect without Location for $Artifact." }
                 $uri = [uri]::new($uri, $location)
@@ -78,11 +103,14 @@ function Save-VerifiedDownload([uri]$Source, [string]$Destination, [string]$Expe
             }
             if ($status -ne 200) { throw "Unexpected HTTP $status for $Artifact." }
             $output = [IO.File]::Open($Destination, 'CreateNew')
-            try { $response.GetResponseStream().CopyTo($output) } finally { $output.Dispose() }
+            try {
+                $response.GetResponseStream().CopyTo($output)
+                Write-SetupNote "HTTP $status received $($output.Length) bytes: $Artifact"
+            } finally { $output.Dispose() }
         } finally { $response.Dispose() }
         $actual = Get-Hash $Destination
         if ($actual -cne $ExpectedHash) { throw "SHA-256 mismatch for $Artifact (expected $ExpectedHash; got $actual)." }
-        Write-SetupNote "SHA-256 VERIFIED: $Artifact $actual"
+        Write-SetupNote "SHA-256 VERIFIED: $Artifact $actual (pyproject.toml pin)"
         return [ordered]@{ file = $Artifact; url = $Source.AbsoluteUri; sha256 = $actual; verification = 'pinned SHA-256' }
     }
     throw "Too many download redirects for $Artifact."
@@ -109,6 +137,8 @@ try {
     if (Test-Path -LiteralPath $logPath) { Assert-NotLinked (Get-Item -LiteralPath $logPath -Force) }
     [IO.File]::WriteAllText($logPath, '', $Utf8)
     $setupLog = $logPath
+    Start-SetupPhase 'Preflight'
+    Write-SetupNote 'SETUP on the online setup machine. Target: Windows 11 x86-64. No application code will run.'
     $destination = Join-Path $Root 'bundle'
     $destinationRecords = Join-Path $Root 'bundle-records'
     foreach ($output in @($destination, $destinationRecords)) {
@@ -126,7 +156,7 @@ try {
     $uvVersion = $pins['required-version']
     $request = "cpython-$pythonVersion-windows-x86_64-none"
     $uvUrl = "https://releases.astral.sh/github/uv/releases/download/$uvVersion/uv-x86_64-pc-windows-msvc.zip"
-    Write-SetupNote "PREPARE (ONLINE): CPython $pythonVersion, uv $uvVersion"
+    Write-SetupNote "Requested in pyproject.toml: CPython $pythonVersion; uv $uvVersion."
 
     # Already protected by the exclusive lock and the stale-scratch check.
     $stage = Join-Path $Root '.prepare-work'
@@ -148,10 +178,13 @@ try {
     if ($reuseLock) {
         Assert-NotLinked (Get-Item -LiteralPath $sourceLock -Force)
         [IO.File]::Copy($sourceLock, (Join-Path $records 'uv.lock'))
-        Write-SetupNote 'Using supplied uv.lock; changes require a new lock. No fallback to resolution.'
+        Write-SetupNote 'Using supplied uv.lock unchanged; a stale lock fails instead of triggering resolution.'
     } else {
-        Write-SetupNote 'No uv.lock supplied; resolving from PyPI.'
+        Write-SetupNote 'No uv.lock supplied; one will be resolved from PyPI on the online setup machine.'
     }
+    Complete-SetupPhase
+    Start-SetupPhase 'uv and license downloads' 'internet'
+    Write-SetupNote 'HTTPS/TLS verification on; allowed hosts: releases.astral.sh, raw.githubusercontent.com, github.com, release-assets.githubusercontent.com. Redirects are checked before each request; Windows proxy settings apply.'
     # These downloads run only on the setup machine. Keep TLS validation on.
     $archive = Join-Path $work 'uv.zip'
     [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
@@ -167,18 +200,21 @@ try {
         $notices += @("uv $uvVersion - $upstreamFile", [IO.File]::ReadAllText($notice, $Utf8))
     }
 
+    Complete-SetupPhase
+    Start-SetupPhase 'Verify and inspect uv'
     Add-Type -AssemblyName System.IO.Compression.FileSystem
     $extract = Join-Path $work 'uv'
     [IO.Compression.ZipFile]::ExtractToDirectory($archive, $extract)
     $uv = Join-Path $extract 'uv.exe'
     if ((Get-Hash $uv) -ne $pins['uv-exe-sha256']) { throw 'uv.exe failed pinned SHA-256 verification.' }
-    Write-SetupNote "SHA-256 VERIFIED: uv.exe $($pins['uv-exe-sha256'])"
+    Write-SetupNote "SHA-256 VERIFIED: uv.exe $($pins['uv-exe-sha256']) (pyproject.toml pin; extracted locally)"
     $reported = & $uv --version
     if ($LASTEXITCODE -ne 0 -or $reported -notmatch ('^uv ' + [regex]::Escape($uvVersion) + '\b')) {
         throw 'Unexpected uv version.'
     }
+    Write-SetupNote "Executable reports: $reported"
 
-    $catalogJson = & $uv --no-config python list $request --all-versions --all-platforms --all-arches --only-downloads --show-urls --output-format json
+    $catalogJson = & $uv --offline --no-config python list $request --all-versions --all-platforms --all-arches --only-downloads --show-urls --output-format json
     if ($LASTEXITCODE -ne 0) { throw 'uv could not inspect the managed CPython catalog.' }
     $catalog = @($catalogJson | ConvertFrom-Json)
     if ($catalog.Count -ne 1 -or $catalog[0].key -cne $request) {
@@ -190,14 +226,19 @@ try {
     if ($pythonUrl -cnotmatch $pattern) {
         throw 'The catalog selected an unexpected CPython archive URL.'
     }
+    Write-SetupNote "Local uv catalog selected $request from build $($Matches['release'])."
     $mirror = Join-Path $work 'p'
     $releaseFolder = Join-Path $mirror $Matches['release']
     $pythonFile = [Uri]::UnescapeDataString($Matches['file'])
     [IO.Directory]::CreateDirectory($releaseFolder) | Out-Null
+    Complete-SetupPhase
+    Start-SetupPhase 'CPython archive download' 'internet'
     $downloads += Save-VerifiedDownload $pythonUrl (Join-Path $releaseFolder $pythonFile) $pins['python-archive-sha256'] $pythonFile
     $installDir = Join-Path $work 'python'
+    Complete-SetupPhase
+    Start-SetupPhase 'Install CPython locally'
     Write-SetupNote 'Installing CPython from the verified local archive. uv may say "Downloading" while reading this local file; no network is used in this step.'
-    Invoke-SetupStep 'python_install_from_verified_archive' $uv @(
+    Invoke-SetupCommand 'python_install_from_verified_archive' $uv @(
         '--offline', '--no-config', 'python', 'install', $request,
         '--mirror', ([uri]::new($mirror).AbsoluteUri), '--install-dir', $installDir, '--no-bin', '--no-registry'
     )
@@ -211,64 +252,104 @@ try {
     $python = Join-Path $runtime 'python.exe'
     $helper = Join-Path $Root 'prepare.py'
     $pythonFlags = @('-I', '-S', '-B', '-X', 'utf8', $helper)
-    Invoke-SetupStep 'project_policy_check' $python ($pythonFlags + @('validate', (Join-Path $records 'pyproject.toml'), $pythonVersion, $uvVersion))
+    Complete-SetupPhase
+    Start-SetupPhase 'Validate project settings'
+    Invoke-SetupCommand 'project_policy_check' $python ($pythonFlags + @('validate', (Join-Path $records 'pyproject.toml'), $pythonVersion, $uvVersion))
+    Complete-SetupPhase
     $index = 'https://pypi.org/simple'
     $flags = @('--no-config', '--system-certs', '--no-python-downloads')
     if (-not $reuseLock) {
-        Invoke-SetupStep 'dependency_lock' $uv ($flags + @(
-            'lock', '--project', $records, '--python', $python, '--no-sources', '--no-build', '--default-index', $index
-        ))
+        Start-SetupPhase 'Resolve dependency lock' 'internet metadata'
+        Write-SetupNote "PyPI index: $index. uv may also read package metadata from files.pythonhosted.org. TLS uses system trust; metadata is not hash-pinned. No source builds or Python downloads."
+        $previousRustLog = $env:RUST_LOG
+        try {
+            # Request/cache diagnostics, not verbose HTTP header or credential tracing.
+            $env:RUST_LOG = 'warn,uv_client::cached_client=debug'
+            Invoke-SetupCommand 'dependency_lock' $uv ($flags + @(
+                'lock', '--project', $records, '--python', $python, '--no-sources', '--no-build', '--default-index', $index
+            ))
+        } finally { $env:RUST_LOG = $previousRustLog }
+        Complete-SetupPhase
     }
-    Invoke-SetupStep 'export_install_plan' $uv ($flags + @(
+    Start-SetupPhase 'Export offline install plan'
+    Invoke-SetupCommand 'export_install_plan' $uv ($flags + @(
         '--offline', 'export', '--project', $records, '--python', $python, '--locked', '--no-default-groups',
         '--no-emit-project', '--no-header', '--format', 'requirements.txt',
         '--output-file', (Join-Path $bundle 'install-plan.txt'), '--quiet'
     ))
+    $lockHash = Get-Hash (Join-Path $records 'uv.lock')
+    Write-SetupNote "uv.lock SHA-256: $lockHash; exported hashed requirements to install-plan.txt."
+    Complete-SetupPhase
+    Start-SetupPhase 'Wheel downloads' 'internet'
+    Write-SetupNote 'Only locked HTTPS wheel URLs on files.pythonhosted.org/packages/ are allowed. Redirects are rejected; each wheel must match its uv.lock SHA-256.'
     $provenance = [ordered]@{
         schema = 1
         python = $pythonVersion
         uv = $uvVersion
         uv_exe_sha256 = $pins['uv-exe-sha256']
         index = $index
-        uv_lock_sha256 = Get-Hash (Join-Path $records 'uv.lock')
+        uv_lock_sha256 = $lockHash
         downloads = $downloads
     }
     [IO.File]::WriteAllText((Join-Path $records 'provenance.json'), ($provenance | ConvertTo-Json -Depth 4), $Utf8)
-    Invoke-SetupStep 'download_wheelhouse' $python ($pythonFlags + @('wheels', $bundle, $records, $pythonVersion))
+    Invoke-SetupCommand 'download_wheelhouse' $python ($pythonFlags + @('wheels', $bundle, $records, $pythonVersion))
+    Complete-SetupPhase
     # Fresh venv and no retained cache. Fail if the exact target command fails
     # without network, even if every downloaded file passed its own checksum.
-    Write-SetupNote 'BEGIN: trial offline installation'
+    Start-SetupPhase 'Trial offline installation'
+    Write-SetupNote 'Create a temporary .venv from runtime/ and install only from local wheels with required hashes. Check dependency metadata; no app or package imports are tested.'
     Set-LocalEnvironment (Join-Path $work 'offline')
     $probeVenv = Join-Path $work 'probe-venv'
-    Initialize-OfflineVenv $bundle $probeVenv 6>&1 | ForEach-Object { Write-SetupNote ([string]$_) }
+    Initialize-OfflineVenv $bundle $probeVenv 6>&1 | ForEach-Object { Write-SetupNote ([string]$_) 'DETAIL' }
     $inventory = Join-Path $work 'installed-packages.txt'
-    [IO.File]::WriteAllLines($inventory, [string[]]@(Read-EnvironmentPackages $probeVenv $pythonVersion $python), $Utf8)
-    Write-SetupNote 'PASS: trial offline installation'
-    Invoke-SetupStep 'manifest' $python ($pythonFlags + @('manifest', $bundle, $inventory, $pythonVersion, $uvVersion))
+    $packages = @(Read-EnvironmentPackages $probeVenv $pythonVersion $python)
+    [IO.File]::WriteAllLines($inventory, [string[]]$packages, $Utf8)
+    Write-SetupNote "Verified isolated CPython and recorded $($packages.Count) installed distribution(s)."
+    Complete-SetupPhase
+    Start-SetupPhase 'Write bundle manifest'
+    Invoke-SetupCommand 'manifest' $python ($pythonFlags + @('manifest', $bundle, $inventory, $pythonVersion, $uvVersion))
+    Complete-SetupPhase
 
+    Start-SetupPhase 'Publish prepared folder'
     Set-Location -LiteralPath $Root
     Remove-PreparationScratch $work
     [IO.Directory]::Move($bundle, $destination)
     [IO.Directory]::Move($records, $destinationRecords)
-    Write-SetupNote 'PREPARATION SUCCESS: prepared folder bundle/; no Transfer ZIP was created.'
-    Write-SetupNote 'Review bundle/, add application/, input/, workings/ and output/, then ZIP the contents with START.bat at the root.'
-    Write-SetupNote 'Keep setup.log and bundle-records/ on the online setup machine.'
+    Write-SetupNote 'Published prepared folder bundle/ and online build records bundle-records/. No Transfer ZIP was created.'
+    Complete-SetupPhase
     $code = 0
 } catch {
     $problem = $_.Exception.Message
-    try { Write-SetupNote "PREPARATION FAILED: $problem" }
-    catch { Write-Host 'PREPARATION FAILED; setup.log was not writable.' -ForegroundColor Red }
+    try { Write-SetupNote "FAILED: $problem" 'ERROR' }
+    catch { Write-Host 'SETUP FAILED; setup.log was not writable.' -ForegroundColor Red }
 } finally {
     Set-Location -LiteralPath $originalLocation.Path
-    [Console]::OutputEncoding = $originalEncoding
     if ($null -ne $stage -and [IO.Directory]::Exists($stage)) {
+        $script:setupPhase = 'Cleanup'
         try {
             Remove-PreparationScratch $stage
+            Write-SetupNote 'Removed .prepare-work/ (including any temporary trial environment).'
         } catch {
-            Write-Host "PREPARATION CLEANUP FAILED: review the retained .prepare-* folder before retrying. $($_.Exception.Message)" -ForegroundColor Red
             $code = 10
+            try { Write-SetupNote "Cleanup failed: $($_.Exception.Message) Review the retained .prepare-* folder before retrying." 'ERROR' }
+            catch { Write-Host 'SETUP cleanup could not be recorded in setup.log.' -ForegroundColor Red }
         }
     }
-    if ($null -ne $setupLock) { $setupLock.Dispose() }
+    try {
+        $script:setupPhase = 'Result'
+        if ($code -eq 0) {
+            Write-SetupNote 'Next: IT reviews the prepared folder, adds application/, input/, workings/ and output/, and creates the Transfer ZIP.'
+            Write-SetupNote 'Keep setup.log and bundle-records/ on the online setup machine.'
+            Write-SetupNote "SUCCESS (exit 0; elapsed $(Format-Duration $setupTimer))"
+        } else {
+            Write-SetupNote "FAILURE (exit $code; elapsed $(Format-Duration $setupTimer))" 'ERROR'
+        }
+    } catch {
+        $code = 10
+        Write-Host 'SETUP FAILED; setup.log was not writable.' -ForegroundColor Red
+    } finally {
+        [Console]::OutputEncoding = $originalEncoding
+        if ($null -ne $setupLock) { $setupLock.Dispose() }
+    }
 }
 exit $code

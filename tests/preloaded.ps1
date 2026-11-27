@@ -106,6 +106,21 @@ print('STDLIB APPLICATION SUCCESS')
     }
 }
 
+function Read-TestSetupLog([string]$Source, [bool]$Success) {
+    $lines = [IO.File]::ReadAllLines((Join-Path $Source 'setup.log'))
+    $prefix = '^\d{4}-\d\d-\d\d \d\d:\d\d:\d\d\.\d{3} UTC \| (INFO|DETAIL|ERROR) \| [^|]+ \| .+'
+    if (-not $lines.Count -or @($lines | Where-Object { $_ -cnotmatch $prefix }).Count) {
+        throw 'setup.log has a missing or malformed UTC record.'
+    }
+    $log = $lines -join "`n"
+    if ($log -match [regex]::Escape($Source) -or $log -match [regex]::Escape($Source.Replace('\', '/'))) {
+        throw 'setup.log exposed its absolute Starter ZIP extraction path.'
+    }
+    $result = if ($Success) { '\| INFO \| Result \| SUCCESS \(exit 0;' } else { '\| ERROR \| Result \| FAILURE \(exit 10;' }
+    if ($lines[-1] -notmatch $result) { throw 'setup.log did not finish with the expected result.' }
+    return $log
+}
+
 function New-PreparedTestZip([string]$Scenario) {
         $source = Join-Path $testRoot "$scenario online"
         if ($scenario -eq 'wheels') { $source += 'x' * (125 - $source.Length) }
@@ -138,9 +153,13 @@ function New-PreparedTestZip([string]$Scenario) {
             try {
                 & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $source 'prepare.ps1') | Out-Host
                 if ($LASTEXITCODE -ne 10 -or (Test-Path -LiteralPath (Join-Path $source 'bundle')) -or
-                    (Test-Path -LiteralPath (Join-Path $source 'prepared-app.zip')) -or
-                    [IO.File]::ReadAllText((Join-Path $source 'setup.log')) -notmatch 'SHA-256 mismatch for uv-') {
+                    (Test-Path -LiteralPath (Join-Path $source 'prepared-app.zip'))) {
                     throw 'A bad pinned SHA-256 did not fail closed with a setup.log entry.'
+                }
+                $failedLog = Read-TestSetupLog $source $false
+                if ($failedLog -notmatch '\| ERROR \| uv and license downloads \| FAILED: SHA-256 mismatch for uv-.*expected [a-f0-9]{64}; got [a-f0-9]{64}' -or
+                    $failedLog -match '\| Verify and inspect uv \| BEGIN') {
+                    throw 'setup.log did not record the hash failure or attempted to continue.'
                 }
             } finally { [IO.File]::WriteAllText($project, $original, $utf8) }
         }
@@ -155,10 +174,28 @@ function New-PreparedTestZip([string]$Scenario) {
             throw 'Online preparation left scratch work.'
         }
         $bundle = Join-Path $source 'bundle'
+        $setupLog = Read-TestSetupLog $source $true
         if (@(Get-ChildItem -LiteralPath $source -File -Force -Filter '*.zip').Count -or
             (Test-Path -LiteralPath (Join-Path $bundle 'application')) -or
-            [IO.File]::ReadAllText((Join-Path $source 'setup.log')) -notmatch 'prepared folder bundle/; no Transfer ZIP was created') {
+            $setupLog -notmatch 'Published prepared folder bundle/ and online build records bundle-records/\. No Transfer ZIP was created\.') {
             throw 'SETUP must publish a prepared folder without app code or a Transfer ZIP.'
+        }
+        $phases = @('Preflight', 'uv and license downloads', 'Verify and inspect uv', 'CPython archive download',
+                    'Install CPython locally', 'Validate project settings', 'Resolve dependency lock',
+                    'Export offline install plan', 'Wheel downloads', 'Trial offline installation',
+                    'Write bundle manifest', 'Publish prepared folder')
+        $observed = @($setupLog -split "`n" | ForEach-Object {
+            if ($_ -match '\| INFO \| ([^|]+) \| BEGIN \(') { $Matches[1] }
+        })
+        if (($observed -join ',') -cne ($phases -join ',') -or
+            $setupLog -notmatch 'Install CPython locally \| .*reading this local file' -or
+            $setupLog -notmatch 'Trial offline installation \| .*required hashes' -or
+            $setupLog -notmatch 'Cleanup \| Removed \.prepare-work/') {
+            throw 'setup.log did not record the expected setup phases.'
+        }
+        if ($scenario -eq 'wheels' -and
+            $setupLog -notmatch 'Resolve dependency lock \| .*Sending fresh GET request for: https://pypi\.org/simple/') {
+            throw 'setup.log did not record the actual PyPI metadata request.'
         }
         $records = Join-Path $source 'bundle-records'
         $provenance = [IO.File]::ReadAllText((Join-Path $records 'provenance.json')) | ConvertFrom-Json
@@ -178,6 +215,14 @@ function New-PreparedTestZip([string]$Scenario) {
         if (@($provenance.downloads).Count -ne (4 + $wheels.Count)) {
             throw 'A downloaded artifact is missing from provenance.'
         }
+        foreach ($entry in $provenance.downloads) {
+            $file = [IO.Path]::GetFileName($entry.file)
+            if (-not $setupLog.Contains("GET: $($entry.url)") -or
+                $setupLog -notmatch ('HTTP 200 received [1-9]\d* bytes: ' + [regex]::Escape($file)) -or
+                -not $setupLog.Contains("SHA-256 VERIFIED: $file $($entry.sha256)")) {
+                throw "setup.log download receipt is incomplete for $file."
+            }
+        }
         foreach ($wheel in $wheels) {
             $entry = @($provenance.downloads | Where-Object file -ceq ("wheelhouse/" + $wheel.Name))
             if ($entry.Count -ne 1 -or $entry[0].sha256 -ne (Get-FileHash -LiteralPath $wheel.FullName).Hash) {
@@ -195,8 +240,8 @@ function New-PreparedTestZip([string]$Scenario) {
                 @(Get-ChildItem -LiteralPath $source -File -Force -Filter '*.zip').Count) {
                 throw 'Replaying the saved lock changed the verified payload or created a ZIP.'
             }
-            $replayLog = [IO.File]::ReadAllText((Join-Path $source 'setup.log'))
-            if ($replayLog -notmatch 'Using supplied uv.lock' -or $replayLog -match 'BEGIN: dependency_lock') {
+            $replayLog = Read-TestSetupLog $source $true
+            if ($replayLog -notmatch 'Using supplied uv.lock unchanged' -or $replayLog -match '\| Resolve dependency lock \|') {
                 throw 'Replaying the saved lock silently resolved.'
             }
         }

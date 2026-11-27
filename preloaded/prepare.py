@@ -49,6 +49,7 @@ def validate_project(path, python, uv):
         for req in requirements
     ):
         raise ValueError("Use ordinary PyPI requirements, not URLs, paths or custom sources")
+    print(f"Validated {len(requirements)} declared dependency requirement(s) and PyPI-only settings.")
 
 
 def wheel_url(url):
@@ -80,7 +81,7 @@ def compatible_wheel(name, version):
 
 class NoRedirect(HTTPRedirectHandler):
     def redirect_request(self, req, fp, code, msg, headers, newurl):
-        raise ValueError("Wheel download unexpectedly redirected")
+        raise ValueError(f"HTTP {code} redirect refused; wheel redirects are not allowed")
 
 
 def download_wheels(bundle, records, version):
@@ -110,18 +111,26 @@ def download_wheels(bundle, records, version):
     provenance_path = records / "provenance.json"
     provenance = json.loads(provenance_path.read_text(encoding="utf-8"))
     for name, (url, expected) in sorted(wheels.items()):
-        print(f"Download: {url}", flush=True)
+        print(f"GET: {url} ({name})", flush=True)
         # TLS verification is on; select no insecure fallback or other index.
         target = wheelhouse / name
-        with opener.open(url, timeout=60) as response, target.open("xb") as output:
-            digest = hashlib.sha256()
-            while chunk := response.read(1024 * 1024):
-                digest.update(chunk)
-                output.write(chunk)
+        try:
+            with opener.open(url, timeout=60) as response, target.open("xb") as output:
+                if response.status != 200:
+                    raise ValueError(f"unexpected HTTP {response.status}")
+                digest = hashlib.sha256()
+                size = 0
+                while chunk := response.read(1024 * 1024):
+                    digest.update(chunk)
+                    output.write(chunk)
+                    size += len(chunk)
+        except (OSError, ValueError) as exc:
+            raise SystemExit(f"Wheel download failed for {name}: {exc}") from None
+        print(f"HTTP 200 received {size} bytes: {name}", flush=True)
         actual = digest.hexdigest()
         if actual != expected:
-            raise ValueError(f"Wheel failed locked SHA-256 verification: {name}")
-        print(f"SHA-256 VERIFIED: {name} {actual}", flush=True)
+            raise SystemExit(f"SHA-256 mismatch for {name} (expected {expected}; got {actual}).")
+        print(f"SHA-256 VERIFIED: {name} {actual} (uv.lock pin)", flush=True)
         provenance["downloads"].append(
             dict(file=f"wheelhouse/{name}", url=url, sha256=actual, verification="uv.lock SHA-256")
         )
@@ -144,6 +153,7 @@ def write_manifest(bundle, inventory, python, uv):
             "sha256": files,
         }, indent=2, ensure_ascii=True) + "\n", encoding="utf-8"
     )
+    print(f"bundle-manifest.json records SHA-256 for {len(files)} prepared environment files.")
 
 
 if __name__ == "__main__":
